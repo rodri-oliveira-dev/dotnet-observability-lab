@@ -13,13 +13,13 @@ Read only the material relevant to the current task, starting with:
 1. the current GitHub issue;
 2. `README.md`;
 3. `CONTRIBUTING.md`;
-4. `Directory.Packages.props`;
-5. `Directory.Build.props`;
-6. `.editorconfig`;
-7. `global.json`;
-8. `DotNetObservabilityLab.slnx`;
-9. `docs/adr/` when introduced;
-10. `docs/architecture/` when introduced.
+4. `docs/adr/`;
+5. `docs/architecture/`;
+6. `Directory.Packages.props`;
+7. `Directory.Build.props`;
+8. `.editorconfig`;
+9. `global.json`;
+10. `DotNetObservabilityLab.slnx`.
 
 Do not load or copy unrelated material merely because another repository contains it.
 
@@ -44,6 +44,15 @@ Mandatory dependency rules:
 - `Ingestion.*` must not reference `Consolidation.*`.
 - Domain/application code must not depend on Aspire.
 - Transport concerns must not leak into domain logic.
+
+## Architecture documentation
+
+- LikeC4 under `docs/architecture` is the source of truth for architecture diagrams.
+- ADRs under `docs/adr` record significant architectural decisions and are validated with ADR Guard.
+- A change that alters a modeled process, responsibility, relationship, data owner, broker/cache/database boundary, or observability relationship must update LikeC4 in the same change.
+- A significant architectural decision with plausible alternatives and consequences requires a new or updated ADR.
+- Do not rewrite historical ADRs merely to make them look current; supersede decisions according to the ADR process.
+- Do not duplicate LikeC4 diagrams by hand in Markdown.
 
 ## Implementation rules
 
@@ -74,25 +83,32 @@ Do not inject `TimeProvider` into components that do not need time.
 - The repository uses Central Package Management.
 - Never put a `Version=` on a `PackageReference`.
 - Keep `Directory.Packages.props` limited to packages actually used by the lab.
+- Node architecture tooling is pinned in `package.json` and `package-lock.json`.
 - Evaluate new dependencies for concrete value, operational cost, and lock-in before adding them.
-
-## Documentation
-
-- Keep the root README concise and operational.
-- When ADR Guard and LikeC4 are introduced, architecture changes must update them in the same change.
-- Do not rewrite historical ADRs to describe a new decision; supersede/update according to the ADR process.
-- Avoid duplicate hand-maintained architecture diagrams once LikeC4 becomes the source of truth.
 
 ## Validation
 
 Run validation proportional to the impact.
 
-Baseline:
+Architecture/documentation baseline:
 
 ```bash
 dotnet tool restore
+dotnet tool run adr-guard check docs/adr
+
+npm ci
+npm run architecture:validate
+npm run architecture:format:check
+npm run architecture:build
+
 dotnet restore ./DotNetObservabilityLab.slnx
 dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
+```
+
+When ADRs change, regenerate `docs/adr/README.md` with:
+
+```bash
+dotnet tool run adr-guard index docs/adr
 ```
 
 Run the closest relevant tests once test projects exist. Record any validation that cannot be executed and why.

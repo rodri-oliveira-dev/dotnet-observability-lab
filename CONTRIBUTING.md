@@ -6,6 +6,7 @@ Keep changes small, reproducible, and proportional to this lab's purpose.
 
 - Use the .NET SDK defined by `global.json`.
 - Restore repository-local tools with `dotnet tool restore`.
+- Use Node.js 20+ and install architecture tooling with `npm ci`.
 - Package versions belong in `Directory.Packages.props`.
 - Never commit secrets, tokens, passwords, or local environment files.
 
@@ -27,16 +28,31 @@ Preserve the runtime boundaries:
 - transport-specific details stay at infrastructure/process boundaries;
 - ServiceDefaults contains cross-cutting Aspire defaults only.
 
-When a change modifies an architectural decision, relationship, component, database, queue, or observability flow, update the corresponding ADR/LikeC4 documentation once those facilities are introduced.
+LikeC4 is the source of truth for architecture diagrams. When a change modifies an architectural relationship, process, responsibility, database/cache ownership, queue/broker relationship, or observability flow represented by the model, update `docs/architecture` in the same pull request.
+
+Use ADR Guard for architectural decisions. Create/update an ADR when a change introduces or materially changes a decision with plausible alternatives and meaningful consequences. Do not create ADRs for routine implementation details.
 
 ## Validation
 
-Run validation proportional to the change. The baseline is:
+Run validation proportional to the change. The architecture/documentation baseline is:
 
 ```bash
 dotnet tool restore
+dotnet tool run adr-guard check docs/adr
+
+npm ci
+npm run architecture:validate
+npm run architecture:format:check
+npm run architecture:build
+
 dotnet restore ./DotNetObservabilityLab.slnx
 dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
+```
+
+If ADRs changed, regenerate and commit the deterministic index:
+
+```bash
+dotnet tool run adr-guard index docs/adr
 ```
 
 Tests and coverage are introduced as behavior is added. Do not create tests for framework internals merely to increase coverage.

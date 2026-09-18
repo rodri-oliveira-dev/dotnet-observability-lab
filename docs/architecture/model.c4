@@ -1,0 +1,114 @@
+// Current and planned architecture for dotnet-observability-lab.
+// Elements tagged as #future are intentional placeholders required by the roadmap
+// and must not be read as already implemented runtime dependencies.
+
+specification {
+  tag api
+  tag worker
+  tag database
+  tag cache
+  tag broker
+  tag orchestration
+  tag external
+  tag future
+
+  element actor {
+    style {
+      shape person
+    }
+  }
+
+  element softwareSystem
+  element container
+  element component
+}
+
+model {
+  apiClient = actor "API client" {
+    #external
+    description "Calls the write and read HTTP APIs to exercise the lab scenarios."
+  }
+
+  developer = actor "Developer" {
+    #external
+    description "Runs the local environment, changes the implementation, and inspects architecture and telemetry."
+  }
+
+  lab = softwareSystem "dotnet-observability-lab" {
+    description "Reference implementation for reliable asynchronous processing and distributed observability with .NET Aspire and OpenTelemetry."
+
+    ingestionApi = container "Ingestion.Api" {
+      #api
+      technology ".NET 10 / ASP.NET Core Minimal API"
+      description "Write-side HTTP boundary. The bootstrap currently exposes only minimal endpoints; idempotent value ingestion is introduced later."
+    }
+
+    ingestionOutboxWorker = container "Ingestion.Outbox.Worker" {
+      #worker
+      technology ".NET 10 Worker Service"
+      description "Dedicated write-side background process. Outbox publication behavior is introduced in a later issue."
+    }
+
+    consolidationApi = container "Consolidation.Api" {
+      #api
+      technology ".NET 10 / ASP.NET Core Minimal API"
+      description "Read-side HTTP boundary. The consolidated read model is introduced later and remains independent from Ingestion.Api."
+    }
+
+    consolidationWorker = container "Consolidation.Worker" {
+      #worker
+      technology ".NET 10 Worker Service"
+      description "Dedicated read-side background process. Message consumption, Inbox, and consolidation behavior are introduced later."
+    }
+
+    postgresql = container "PostgreSQL" {
+      #database #future
+      technology "PostgreSQL"
+      description "Planned persistence resource. A later issue introduces separately owned ingestion_db and consolidation_db logical databases."
+    }
+
+    redis = container "Redis" {
+      #cache #future
+      technology "Redis"
+      description "Planned optimization for idempotency and duplicate fast paths. It will not be the authoritative correctness store."
+    }
+
+    rabbitmq = container "RabbitMQ" {
+      #broker #future
+      technology "RabbitMQ"
+      description "Planned asynchronous transport between the write and consolidation boundaries."
+    }
+  }
+
+  aspire = softwareSystem "Aspire development environment" {
+    #orchestration
+    description "Local composition and developer-experience tooling. It is not part of the business message path."
+
+    appHostDashboard = container ".NET Aspire AppHost / Dashboard" {
+      #orchestration
+      technology ".NET Aspire"
+      description "Starts and observes local resources and provides the development dashboard."
+    }
+  }
+
+  apiClient -> lab "Exercises the lab through HTTP"
+  developer -> lab "Develops and studies the reference implementation"
+  developer -> aspire.appHostDashboard "Runs and inspects the local environment"
+
+  aspire.appHostDashboard -> lab.ingestionApi "Orchestrates local process"
+  aspire.appHostDashboard -> lab.ingestionOutboxWorker "Orchestrates local process"
+  aspire.appHostDashboard -> lab.consolidationApi "Orchestrates local process"
+  aspire.appHostDashboard -> lab.consolidationWorker "Orchestrates local process"
+
+  apiClient -> lab.ingestionApi "Submits values in the target write flow"
+  apiClient -> lab.consolidationApi "Reads the consolidated result in the target read flow"
+
+  lab.ingestionApi -> lab.postgresql "Will persist values, idempotency state, and Outbox"
+  lab.ingestionApi -> lab.redis "Will use as idempotency fast path"
+  lab.ingestionOutboxWorker -> lab.postgresql "Will poll the Outbox"
+  lab.ingestionOutboxWorker -> lab.rabbitmq "Will publish integration events"
+  lab.rabbitmq -> lab.consolidationWorker "Will deliver integration events"
+  lab.consolidationWorker -> lab.postgresql "Will persist Inbox and consolidated read model"
+  lab.consolidationWorker -> lab.redis "Will use as duplicate fast path"
+  lab.consolidationApi -> lab.postgresql "Will read the consolidated read model"
+}
