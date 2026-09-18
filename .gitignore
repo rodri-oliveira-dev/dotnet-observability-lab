@@ -1,0 +1,36 @@
+# Build output
+**/bin/
+**/obj/
+artifacts/
+
+# IDE / editor
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test output
+TestResults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+
+# Aspire local state
+.aspire/
+
+# Local configuration / secrets
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+secrets.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Consolidation.Api/Consolidation.Api.csproj" />
+    <Project Path="src/Consolidation.Worker/Consolidation.Worker.csproj" />
+    <Project Path="src/Contracts/Contracts.csproj" />
+    <Project Path="src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj" />
+    <Project Path="src/DotNetObservabilityLab.ServiceDefaults/DotNetObservabilityLab.ServiceDefaults.csproj" />
+    <Project Path="src/Ingestion.Api/Ingestion.Api.csproj" />
+    <Project Path="src/Ingestion.Outbox.Worker/Ingestion.Outbox.Worker.csproj" />
+  </Folder>
+</Solution>
