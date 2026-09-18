@@ -3,6 +3,10 @@
 **/obj/
 artifacts/
 
+# Node / architecture tooling
+node_modules/
+dist/
+
 # IDE / editor
 .vs/
 .idea/

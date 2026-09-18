@@ -1,0 +1,83 @@
+// C4 views for dotnet-observability-lab.
+
+global {
+  styleGroup architectureTheme {
+    style element.tag = #api {
+      notation "HTTP API"
+      shape browser
+      color indigo
+    }
+
+    style element.tag = #worker {
+      notation "Worker / process without HTTP"
+      shape component
+      color amber
+    }
+
+    style element.tag = #database {
+      notation "Persistent data store"
+      shape cylinder
+      color green
+    }
+
+    style element.tag = #cache {
+      notation "Cache / optimization"
+      shape cylinder
+      color secondary
+    }
+
+    style element.tag = #broker {
+      notation "Message broker"
+      shape queue
+      color red
+    }
+
+    style element.tag = #orchestration {
+      notation "Development orchestration / dashboard"
+      shape component
+      color gray
+    }
+
+    style element.tag = #external {
+      notation "External actor"
+      color muted
+    }
+
+    style element.tag = #future {
+      notation "Planned / not yet implemented"
+      color muted
+      border dotted
+      opacity 70%
+    }
+  }
+}
+
+views {
+  global style architectureTheme
+
+  view systemContext {
+    title "C4 Level 1 - System Context"
+    description "Shows who interacts with dotnet-observability-lab and keeps .NET Aspire explicit as development tooling rather than part of the functional message path."
+    include apiClient
+    include developer
+    include lab
+    include aspire
+    autoLayout LeftRight
+  }
+
+  view containers of lab {
+    title "C4 Level 2 - Containers"
+    description "Shows the four executable .NET processes and the planned PostgreSQL, Redis, and RabbitMQ resources. Future infrastructure is intentionally styled as planned until its implementation issues are completed."
+    include apiClient
+    include developer
+    include lab.ingestionApi
+    include lab.ingestionOutboxWorker
+    include lab.consolidationApi
+    include lab.consolidationWorker
+    include lab.postgresql
+    include lab.redis
+    include lab.rabbitmq
+    include aspire.appHostDashboard
+    autoLayout LeftRight
+  }
+}

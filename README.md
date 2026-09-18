@@ -6,7 +6,7 @@ The repository intentionally keeps the business domain simple so that asynchrono
 
 ## Current scope
 
-Issue #1 establishes the executable topology only:
+The current baseline provides:
 
 - `Ingestion.Api`
 - `Ingestion.Outbox.Worker`
@@ -15,6 +15,8 @@ Issue #1 establishes the executable topology only:
 - `DotNetObservabilityLab.AppHost`
 - `DotNetObservabilityLab.ServiceDefaults`
 - `Contracts`
+- ADR governance with ADR Guard
+- architecture-as-code with LikeC4
 
 PostgreSQL, Redis, RabbitMQ, Outbox/Inbox processing, and application-level telemetry are introduced by later roadmap issues.
 
@@ -32,10 +34,13 @@ Core boundary rules:
 - ServiceDefaults contains only cross-cutting Aspire defaults;
 - integration contracts belong in `Contracts`, not in either service's domain model.
 
+Architecture documentation lives under [docs](docs/README.md). The LikeC4 model is the source of truth for diagrams, and ADR Guard validates architectural decisions.
+
 ## Prerequisites
 
 - .NET 10 SDK (the repository pins `10.0.400` and rolls forward to the latest feature band)
 - Aspire CLI compatible with Aspire 13.5
+- Node.js 20+ for LikeC4 architecture tooling
 - an OCI-compatible container runtime will be required once infrastructure resources are added in later issues
 
 ## Restore and build
@@ -45,6 +50,24 @@ dotnet tool restore
 dotnet restore ./DotNetObservabilityLab.slnx
 dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
 ```
+
+## Validate architecture
+
+```bash
+dotnet tool run adr-guard check docs/adr
+npm ci
+npm run architecture:validate
+npm run architecture:format:check
+npm run architecture:build
+```
+
+Regenerate the deterministic ADR index after ADR changes:
+
+```bash
+dotnet tool run adr-guard index docs/adr
+```
+
+See [docs/architecture/README.md](docs/architecture/README.md) for the C4 levels, model conventions, and maintenance rules.
 
 ## Run
 

@@ -1,0 +1,19 @@
+{
+  "name": "dotnet-observability-lab",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Architecture tooling for dotnet-observability-lab.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "architecture:validate": "likec4 validate docs/architecture",
+    "architecture:format": "likec4 format docs/architecture",
+    "architecture:format:check": "likec4 format docs/architecture --check",
+    "architecture:build": "likec4 build docs/architecture -o dist/architecture --base ./",
+    "architecture:dev": "likec4 serve docs/architecture"
+  },
+  "devDependencies": {
+    "likec4": "1.59.3"
+  }
+}
