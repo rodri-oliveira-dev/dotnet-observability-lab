@@ -49,4 +49,4 @@ With Central Package Management:
 </ItemGroup>
 ```
 
-In this template, preserve the existing CPM structure and only reorganize build files when the task demonstrates a concrete benefit.
+In this lab, preserve the existing CPM structure and reorganize build files only when a concrete application build or maintenance need is demonstrated.
