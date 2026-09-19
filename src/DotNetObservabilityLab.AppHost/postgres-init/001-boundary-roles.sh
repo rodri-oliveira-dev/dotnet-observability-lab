@@ -22,4 +22,13 @@ CREATE ROLE consolidation_app
   NOREPLICATION
   NOBYPASSRLS;
 ALTER ROLE consolidation_app PASSWORD :'consolidation_password';
+
+-- psql executes each statement outside an explicit transaction, which CREATE DATABASE requires.
+CREATE DATABASE ingestion_db OWNER ingestion_app;
+CREATE DATABASE consolidation_db OWNER consolidation_app;
+
+REVOKE CONNECT ON DATABASE ingestion_db FROM PUBLIC;
+REVOKE CONNECT ON DATABASE consolidation_db FROM PUBLIC;
+GRANT CONNECT ON DATABASE ingestion_db TO ingestion_app;
+GRANT CONNECT ON DATABASE consolidation_db TO consolidation_app;
 EOSQL
