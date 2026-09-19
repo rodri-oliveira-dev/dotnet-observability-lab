@@ -161,13 +161,17 @@ Connect to `ingestion_db` with the ingestion application credentials and
 inspect the pending-to-confirmed transition:
 
 ```sql
-SELECT "Id", event_type, occurred_at, published_at
+SELECT "Id", event_type, occurred_at, published_at, quarantined_at, quarantine_reason
 FROM outbox_messages
 ORDER BY occurred_at DESC
 LIMIT 20;
 ```
 
-`published_at` is set only after the broker confirms publication. To test
+`published_at` is set only after the broker confirms publication. Unsupported event types,
+malformed JSON and invalid message identities are quarantined with a reason and skipped
+by subsequent polls; inspect and repair them deliberately rather than repeatedly retrying
+poison rows. A transport failure or publish timeout does **not** quarantine the row.
+To test
 retry, stop RabbitMQ, restart the API briefly to POST another value, then
 stop the API. That Outbox row stays pending until RabbitMQ returns. A crash
 between broker confirmation and database commit can lead to a duplicate

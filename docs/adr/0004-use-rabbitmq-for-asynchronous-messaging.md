@@ -50,6 +50,12 @@ pending and the worker pauses between polling cycles. Another worker skips
 locked rows; a crash after broker acceptance but before database commit can
 still produce duplicates with the same event ID. Both workers idempotently
 declare the same durable topology, even while the other is stopped.
+Permanently invalid Outbox rows (unknown event type, malformed JSON or invalid
+message identity) are marked as quarantined in the ingestion database and omitted
+from future polling batches, preventing poison messages from starving later events.
+Their error reason remains available for inspection and deliberate remediation;
+transient transport failures and timeouts do not quarantine rows. The publish
+timeout is controlled by the injected TimeProvider to support deterministic tests.
 Consuming, acknowledgements and Inbox processing remain for later issues.
 
 ## Alternatives considered
