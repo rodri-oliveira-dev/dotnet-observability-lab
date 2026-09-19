@@ -2,26 +2,60 @@ name: Ingestion integration
 
 on:
   pull_request:
+    branches:
+      - main
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'docs/adr/**'
+      - 'docs/architecture/**'
+      - '.agents/**'
+      - '.github/workflows/**'
+      - '.github/dependabot.yml'
+      - 'AGENTS.md'
       - 'Directory.*'
       - 'DotNetObservabilityLab.slnx'
-      - '.github/workflows/ingestion-integration.yml'
+      - 'global.json'
+      - '.config/dotnet-tools.json'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ingestion-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ingestion:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Checkout (read-only)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          dotnet-version: '10.0.x'
+          persist-credentials: false
+      - name: Setup .NET using global.json
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Verify GitHub Actions use immutable pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          invalid="$(grep -R -n -E '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+[^[:space:]#]+@' .github/workflows \
+            | grep -Ev '@[0-9a-f]{40}([[:space:]]|$)' || true)"
+          if [ -n "$invalid" ]; then
+            echo "::error::Found an action without a full commit-SHA pin:"
+            echo "$invalid"
+            exit 1
+          fi
+
       - name: Restore
         run: dotnet restore ./DotNetObservabilityLab.slnx
       - name: Build
@@ -33,8 +67,9 @@ jobs:
         run: |
           dotnet tool restore
           dotnet tool run adr-guard check docs/adr
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
         if: always()
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
       - name: LikeC4 validation

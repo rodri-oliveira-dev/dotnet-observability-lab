@@ -22,7 +22,7 @@ Identificar riscos de segurança relevantes sem gerar ruído excessivo, preserva
 3. Pesquise referências antes de expandir arquivos grandes.
 4. Delegue somente inventário e busca mecânica quando houver workers/subagentes; mantenha a avaliação final de risco no agente principal.
 5. Avalie somente categorias aplicáveis ao código real.
-6. Confirme quais analyzers e gates existem de fato; preserve NuGet Audit e os controles existentes, sem afirmar que CodeQL ou Dependency Review estão configurados se não houver evidência.
+6. Verifique os workflows efetivamente presentes e preserve NuGet Audit, CodeQL para C# e Dependency Review em pull requests. Não trate execução do CodeQL como bloqueio automático de merge sem comprovar as regras de proteção do repositório.
 7. Para cada risco, descreva pré-condição, vetor, impacto, evidência e mitigação.
 8. Se houver correção, prefira eliminar a causa em vez de adicionar bypass ou suppression ampla.
 9. Execute a baseline definida em `AGENTS.md` e scanners disponíveis quando o ambiente permitir.

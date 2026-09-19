@@ -151,8 +151,13 @@ production code or workflows also change, run the corresponding .NET, ADR, LikeC
 integration-test gates; a prior green run is not evidence for a new code change.
 
 When reviewing GitHub Actions files, inspect the actual workflows first and use
-`actionlint` when available. Never claim the lab has an actionlint or security gate
-unless its implementation has been verified.
+`actionlint` when available. CI checks are defined by the workflows under
+`.github/workflows/`: ingestion build/integration tests/ADR Guard/LikeC4, CodeQL C#
+analysis and pull-request Dependency Review. The workflow pin-policy check is a
+structural safeguard, **not** a substitute for actionlint or runtime execution.
+Dependabot covers NuGet, .NET SDK, npm/LikeC4 and GitHub Actions through
+`.github/dependabot.yml`. Do not assume SonarQube or NuGet release automation exists.
+
 
 When ADRs change, regenerate `docs/adr/README.md` with:
 

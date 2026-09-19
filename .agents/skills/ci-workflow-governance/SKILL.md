@@ -11,11 +11,11 @@ Adapted from the source template's ci-release-governance skill. This laboratory 
 ## Before editing
 1. Read AGENTS.md, the issue or PR, and list the workflows actually present under .github/workflows/.
 2. Inspect existing triggers, path filters, permissions, commands, credentials and artifact lifecycle.
-3. Confirm compatibility with global.json (.NET 10), Directory.Packages.props, DotNetObservabilityLab.slnx, ADR Guard and LikeC4.
+3. Confirm compatibility with global.json (.NET 10), Directory.Packages.props, DotNetObservabilityLab.slnx, ADR Guard, LikeC4, CodeQL, Dependency Review and Dependabot.
 4. Use authoring-github-workflows for GitHub Actions expression/YAML structural checks.
 5. Preserve least-privilege permissions; do not expose secrets to untrusted PR code or persist credentials unnecessarily.
 6. Preserve meaningful restore/build/test and architecture validation, including PostgreSQL integration tests when behavior changes warrant them.
-7. Do not claim a workflow or gate exists until its file or run is verified.
+7. Preserve the existing ingestion pipeline, C# CodeQL analysis and dependency-delta gate; verify the actual workflow files and their runs before claiming a gate is passing.
 8. When changed files affect architecture, update LikeC4/ADR documentation under their existing governance rules.
 
 ## Validation
@@ -33,7 +33,7 @@ dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
 dotnet test ./DotNetObservabilityLab.slnx --configuration Release --no-build
 ```
 
-Verify the affected workflow actually starts and finishes on the PR. Inspect failed job logs rather than inferring success from the YAML parser. Do not add NuGet publishing, tag/release automation, or credentials as part of ordinary CI maintenance.
+Verify the affected workflows actually start and finish on the PR. A missing SonarQube token is not a reason to introduce a skipped job that looks like a completed quality gate. Inspect failed job logs rather than inferring success from the YAML parser. Do not add NuGet publishing, tag/release automation, or credentials as part of ordinary CI maintenance.
 
 ## Done
 Report changed workflow, existing checks preserved, actual run URL/status and any blocked validation.
