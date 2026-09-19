@@ -55,7 +55,13 @@ model {
     ingestionOutboxWorker = container "Ingestion.Outbox.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Dedicated write-side background process. Uses ingestion_db through ingestion_app and connects to RabbitMQ; Outbox publication behavior is introduced later."
+      description "Independently claims pending Outbox rows in ingestion_db and publishes persistent RabbitMQ events with broker confirmations."
+      outboxPoller = component "Outbox poller" {
+        description "Selects bounded batches using PostgreSQL FOR UPDATE SKIP LOCKED; marks published only after broker confirmation."
+      }
+      rabbitPublisher = component "RabbitMQ publisher adapter" {
+        description "Declares durable topology and uses persistent mandatory publication with confirmations and stable event identity."
+      }
     }
 
     consolidationApi = container "Consolidation.Api" {
@@ -123,7 +129,10 @@ model {
   lab.ingestionApi -> lab.redis "Receives Redis for HTTP idempotency fast path"
   lab.consolidationWorker -> lab.redis "Receives Redis for message deduplication fast path"
 
-  lab.ingestionOutboxWorker -> lab.rabbitmq "Connected to broker; will publish Outbox events in a later issue"
+  lab.ingestionOutboxWorker -> lab.rabbitmq "Publishes persistent integration events with broker confirmations"
+  lab.ingestionOutboxWorker.outboxPoller -> lab.postgresql "Claims pending Outbox records and commits confirmed publication"
+  lab.ingestionOutboxWorker.outboxPoller -> lab.ingestionOutboxWorker.rabbitPublisher "Passes versioned event and stable message ID"
+  lab.ingestionOutboxWorker.rabbitPublisher -> lab.rabbitmq "Mandatory persistent publish with broker confirmation"
   lab.consolidationWorker -> lab.rabbitmq "Declares durable exchange, queue and routing binding"
   lab.rabbitmq -> lab.consolidationWorker "Will deliver integration events once the Inbox consumer is implemented"
   apiClient -> lab.ingestionApi.valuesEndpoint "POST /values with Idempotency-Key"

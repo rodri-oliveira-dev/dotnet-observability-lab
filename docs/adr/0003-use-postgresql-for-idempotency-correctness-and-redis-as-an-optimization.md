@@ -66,7 +66,10 @@ event in the same PostgreSQL transaction.
   Its cache key hashes the caller key rather than exposing it in a Redis key name.
   Cache misses, expiration and failures fall back to the authoritative database.
 - The API never publishes to RabbitMQ. It stores a versioned integration event as a
-  pending Outbox message; a separate worker will publish it in a later issue.
+  pending Outbox message; the independent worker claims pending rows with
+  PostgreSQL row locks and commits PublishedAt only after broker confirmation.
+  A crash after broker confirmation but before database commit may duplicate
+  publication, so the future consumer must use a durable Inbox.
 
 The ingestion API alone applies its schema migrations at startup; its worker shares the
 persistence model but does not execute migrations. The consolidation boundary remains

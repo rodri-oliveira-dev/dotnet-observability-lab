@@ -64,8 +64,10 @@ worker-owned durable direct exchange (`lab.events.v1`) bound to a durable queue
 (`consolidation.value-received.v1`) by routing key `value.received.v1`.
 Only `Ingestion.Outbox.Worker` and `Consolidation.Worker` receive the RabbitMQ
 reference; the consolidation worker declares the topology when it starts.
-Both APIs remain independent of the broker. Outbox publishing and Inbox
-consumption/acknowledgements are implemented by subsequent issues.
+Both APIs remain independent of the broker. The Outbox worker independently
+publishes durable messages with broker confirmations; Inbox consumption and
+acknowledgements follow in subsequent issues. Either worker may idempotently
+declare the durable topology even when the other is offline.
 
 The transport contract is **at-least-once**: a future consumer must persist the
 Inbox identity with the read-model update and tolerate redelivery. See
@@ -80,7 +82,7 @@ Answers:
 
 > How is one application boundary organized internally around its meaningful responsibilities?
 
-The ingestionComponents view now shows the implemented HTTP endpoint, idempotent ingestion use case, and transactional EF Core persistence boundary. Later issues add component views for Outbox publication, consolidation, and read-side querying.
+The ingestionComponents view now shows the implemented HTTP endpoint, idempotent ingestion use case, and transactional EF Core persistence boundary. The outboxPublisherComponents view models the dedicated poller, the confirmed RabbitMQ adapter and their infrastructure boundaries. Later issues add consolidation and read-side querying.
 
 Do not create a component for every class. A component should represent a meaningful responsibility, boundary, port, adapter, hosted service, or processing stage.
 
