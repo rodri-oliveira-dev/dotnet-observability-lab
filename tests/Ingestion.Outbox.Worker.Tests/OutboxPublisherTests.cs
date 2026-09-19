@@ -54,16 +54,26 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
     {
         Guid id = await SeedAsync();
         var publisher = new RecordingPublisher { Fail = true };
+        var clock = new ManualTimeProvider();
         await using var database = fixture.CreateContext();
-        var processor = CreateProcessor(database, publisher);
+        var processor = CreateProcessor(database, publisher, clock);
 
         Assert.Equal(0, await processor.ProcessBatchAsync(CancellationToken.None));
-        Assert.Null((await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == id)).PublishedAt);
+        var pending = await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == id);
+        Assert.Null(pending.PublishedAt);
+        Assert.Null(pending.QuarantinedAt);
+        Assert.Equal(1, pending.PublishAttempts);
+        Assert.Equal(clock.GetUtcNow().AddSeconds(5), pending.NextAttemptAt);
 
         publisher.Fail = false;
+        Assert.Equal(0, await processor.ProcessBatchAsync(CancellationToken.None));
+        Assert.Equal(1, publisher.Attempts);
+        clock.Advance(TimeSpan.FromSeconds(5));
         Assert.Equal(1, await processor.ProcessBatchAsync(CancellationToken.None));
         Assert.Equal([id], publisher.Ids);
-        Assert.NotNull((await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == id)).PublishedAt);
+        var published = await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == id);
+        Assert.NotNull(published.PublishedAt);
+        Assert.Null(published.NextAttemptAt);
     }
 
     [Fact]
@@ -178,12 +188,84 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
         Assert.Null(pending.PublishedAt);
         Assert.Null(pending.QuarantinedAt);
         Assert.Null(pending.QuarantineReason);
+        Assert.Equal(1, pending.PublishAttempts);
+        Assert.Equal(clock.GetUtcNow().AddSeconds(5), pending.NextAttemptAt);
 
-        // The timeout is a transient failure, not a permanent poison message.
+        // The timeout is transient but must honor its persisted retry deadline.
         var retryPublisher = new RecordingPublisher();
+        Assert.Equal(0, await CreateProcessor(database, retryPublisher, clock)
+            .ProcessBatchAsync(CancellationToken.None));
+        clock.Advance(TimeSpan.FromSeconds(5));
         Assert.Equal(1, await CreateProcessor(database, retryPublisher, clock)
             .ProcessBatchAsync(CancellationToken.None));
         Assert.Equal([id], retryPublisher.Ids);
+    }
+
+    [Fact]
+    public async Task A_full_batch_of_transient_failures_does_not_starve_a_later_valid_message()
+    {
+        var earlier = new DateTimeOffset(2026, 9, 18, 12, 0, 0, TimeSpan.Zero);
+        var failingIds = new List<Guid>();
+        for (int i = 0; i < 10; i++)
+        {
+            failingIds.Add(await SeedAsync(occurredAt: earlier));
+        }
+
+        Guid laterId = await SeedAsync();
+        var clock = new ManualTimeProvider();
+        var publisher = new RecordingPublisher { Fail = true };
+        await using var database = fixture.CreateContext();
+        var processor = CreateProcessor(database, publisher, clock);
+
+        Assert.Equal(0, await processor.ProcessBatchAsync(CancellationToken.None));
+        Assert.Equal(10, publisher.Attempts);
+        Assert.Equal(10, await database.OutboxMessages.AsNoTracking().CountAsync(x =>
+            failingIds.Contains(x.Id) && x.PublishedAt == null && x.QuarantinedAt == null &&
+            x.PublishAttempts == 1 && x.NextAttemptAt == clock.GetUtcNow().AddSeconds(5)));
+
+        publisher.Fail = false;
+        Assert.Equal(1, await processor.ProcessBatchAsync(CancellationToken.None));
+        Assert.Equal([laterId], publisher.Ids);
+        Assert.Equal(11, publisher.Attempts);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Equal(10, await processor.ProcessBatchAsync(CancellationToken.None));
+        Assert.Equal(11, publisher.Ids.Length);
+        Assert.Equal(0, await database.OutboxMessages.AsNoTracking()
+            .CountAsync(x => failingIds.Contains(x.Id) && x.PublishedAt == null));
+    }
+
+    [Fact]
+    public async Task Retry_backoff_grows_is_bounded_and_survives_worker_restart()
+    {
+        Guid id = await SeedAsync();
+        var clock = new ManualTimeProvider();
+        var publisher = new RecordingPublisher { Fail = true };
+
+        for (int attempt = 1; attempt <= 9; attempt++)
+        {
+            // A new DbContext/processor models a restarted worker with durable retry state.
+            await using var database = fixture.CreateContext();
+            var processor = CreateProcessor(database, publisher, clock);
+            Assert.Equal(0, await processor.ProcessBatchAsync(CancellationToken.None));
+
+            var pending = await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == id);
+            var delay = TimeSpan.FromSeconds(Math.Min(300, 5 * (1 << Math.Min(attempt - 1, 6))));
+            Assert.Equal(attempt, pending.PublishAttempts);
+            Assert.Equal(clock.GetUtcNow().Add(delay), pending.NextAttemptAt);
+            Assert.Null(pending.QuarantinedAt);
+            Assert.Equal(0, await processor.ProcessBatchAsync(CancellationToken.None));
+            Assert.Equal(attempt, publisher.Attempts);
+            clock.Advance(delay);
+        }
+
+        publisher.Fail = false;
+        await using var resumedDatabase = fixture.CreateContext();
+        Assert.Equal(1, await CreateProcessor(resumedDatabase, publisher, clock)
+            .ProcessBatchAsync(CancellationToken.None));
+        var published = await resumedDatabase.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == id);
+        Assert.NotNull(published.PublishedAt);
+        Assert.Null(published.NextAttemptAt);
+        Assert.Equal(9, published.PublishAttempts);
     }
 
     private async Task<Guid> SeedAsync(bool published = false, string eventType = nameof(ValueReceivedV1),
@@ -222,12 +304,15 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
     private sealed class RecordingPublisher : IOutboxMessagePublisher
     {
         private readonly ConcurrentQueue<Guid> _ids = new();
+        private int _attempts;
+        public int Attempts => Volatile.Read(ref _attempts);
         public bool Fail { get; set; }
         public TimeSpan Delay { get; set; }
         public Guid[] Ids => _ids.ToArray();
 
         public async Task PublishAsync(ValueReceivedV1 message, string json, CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _attempts);
             if (Delay > TimeSpan.Zero)
             {
                 await Task.Delay(Delay, cancellationToken);
