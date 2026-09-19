@@ -19,6 +19,8 @@ internal sealed partial class ConsolidationConsumer(IConnection connection, ISer
         var consumer = new AsyncEventingBasicConsumer(channel);
         consumer.ReceivedAsync += async (_, delivery) =>
         {
+            // Counts deliveries (not distinct events), including invalid payloads and redeliveries.
+            ConsolidationTelemetry.ConsumedMessages.Add(1);
             // Missing/invalid carrier data must never block the business message.
             var parent = ExtractParent(delivery.BasicProperties.Headers);
             using var activity = Traces.StartActivity("rabbitmq process ValueReceived.v1",
@@ -44,8 +46,10 @@ internal sealed partial class ConsolidationConsumer(IConnection connection, ISer
                 await using var scope = scopes.CreateAsyncScope();
                 var processor = scope.ServiceProvider.GetRequiredService<ConsolidationProcessor>();
                 var result = await processor.ProcessAsync(message, stoppingToken);
-                if (result == ConsolidationResult.Duplicate) Duplicate(logger, message.MessageId);
-                else Accepted(logger, message.MessageId);
+                activity?.SetTag("consolidation.result",
+                    result == ConsolidationResult.Duplicate ? "duplicate" : "applied");
+                if (result == ConsolidationResult.Duplicate) Duplicate(logger, message.MessageId, message.ValueId);
+                else Accepted(logger, message.MessageId, message.ValueId);
                 await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
@@ -127,10 +131,10 @@ internal sealed partial class ConsolidationConsumer(IConnection connection, ISer
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Consolidation consumer started.")]
     private static partial void Started(ILogger logger);
-    [LoggerMessage(Level = LogLevel.Information, Message = "Consolidation message {MessageId} committed.")]
-    private static partial void Accepted(ILogger logger, Guid messageId);
-    [LoggerMessage(Level = LogLevel.Information, Message = "Duplicate message {MessageId} ignored.")]
-    private static partial void Duplicate(ILogger logger, Guid messageId);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Consolidation message {MessageId} for value {ValueId} committed.")]
+    private static partial void Accepted(ILogger logger, Guid messageId, Guid valueId);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Duplicate message {MessageId} for value {ValueId} ignored.")]
+    private static partial void Duplicate(ILogger logger, Guid messageId, Guid valueId);
     [LoggerMessage(Level = LogLevel.Error, Message = "Malformed message rejected without requeue.")]
     private static partial void InvalidMessage(ILogger logger, Exception exception);
     [LoggerMessage(Level = LogLevel.Error, Message = "Consolidation failed; delivery requeued.")]
