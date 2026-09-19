@@ -14,9 +14,10 @@ A seleção foi adaptada de
 
 ## Segurança e condições de execução
 
-- Actions de terceiros ficam fixadas por SHA completo, e checkouts são read-only
-  (`persist-credentials: false`). O job do CodeQL tem permissão adicional
-  `security-events: write` somente para enviar resultados.
+- Actions de terceiros ficam fixadas por SHA completo. Os workflows usam
+  `contents: read` para limitar permissões de escrita remota e os checkouts não
+  persistem credenciais (`persist-credentials: false`). O job do CodeQL tem
+  permissão adicional `security-events: write` somente para enviar resultados.
 - O Dependency Review requer que o grafo de dependências esteja disponível no
   repositório. A análise CodeQL requer a funcionalidade de code scanning do GitHub.
   Verifique os resultados reais de cada workflow após a criação do PR.
