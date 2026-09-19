@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="../Consolidation.Persistence/Consolidation.Persistence.csproj" />
     <ProjectReference Include="../DotNetObservabilityLab.ServiceDefaults/DotNetObservabilityLab.ServiceDefaults.csproj" />
+    <ProjectReference Include="../Messaging/Messaging.csproj" />
   </ItemGroup>
 
 </Project>

@@ -53,6 +53,8 @@ builder.AddProject<Projects.Consolidation_Api>("consolidation-api")
 builder.AddProject<Projects.Consolidation_Worker>("consolidation-worker")
     .WithEnvironment("ConnectionStrings__consolidation-db", consolidationConnectionString)
     .WithReference(redis)
-    .WaitFor(consolidationDatabase);
+    .WithReference(rabbitmq)
+    .WaitFor(consolidationDatabase)
+    .WaitFor(rabbitmq);
 
 builder.Build().Run();
