@@ -158,17 +158,17 @@ public sealed class OutboxProcessor(
         }
 
         // Sample the complete pending backlog, including deferred retries, rather than
-            // inferring it from the bounded claimed batch. Observability is best-effort.
-            try
-            {
-                long pending = await database.OutboxMessages.AsNoTracking().LongCountAsync(
-                    x => x.PublishedAt == null && x.QuarantinedAt == null, cancellationToken);
-                OutboxTelemetry.PendingMessages.Record(pending);
-            }
-            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
-            {
-                PendingCountFailure(logger, exception);
-            }
+        // inferring it from the bounded claimed batch. Observability is best-effort.
+        try
+        {
+            long pending = await database.OutboxMessages.AsNoTracking().LongCountAsync(
+                x => x.PublishedAt == null && x.QuarantinedAt == null, cancellationToken);
+            OutboxTelemetry.PendingMessages.Record(pending);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            PendingCountFailure(logger, exception);
+        }
 
         return batch.Published;
     }

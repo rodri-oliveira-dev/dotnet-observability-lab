@@ -7,6 +7,7 @@ using Contracts;
 using Ingestion.Outbox.Worker;
 using Ingestion.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Testcontainers.PostgreSql;
@@ -117,6 +118,68 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
             x => x.PublishedAt == null && x.QuarantinedAt == null);
         Assert.Equal(pending, measurements.Last(x => x.Name == "lab.outbox.messages.pending").Count);
         Assert.All(measurements, x => Assert.Equal(0, x.TagCount));
+    }
+
+    [Fact]
+    public async Task Rolled_back_retry_does_not_emit_a_failure_metric_or_log()
+    {
+        var failures = new ConcurrentQueue<long>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == "Ingestion.Outbox.Worker" &&
+                instrument.Name == "lab.outbox.messages.publish_failures")
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => failures.Enqueue(value));
+        listener.Start();
+
+        Guid id = await SeedAsync();
+        // NOT VALID does not inspect rows from other test cases, but every new UPDATE
+        // must pass the constraint. This forces SaveChanges to reject this retry.
+        await using (var setup = fixture.CreateContext())
+        {
+            await setup.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE outbox_messages ADD CONSTRAINT ck_outbox_retry_telemetry_rollback " +
+                "CHECK (next_attempt_at IS NULL) NOT VALID");
+        }
+
+        var publisher = new RecordingPublisher { Fail = true };
+        var logger = new RecordingOutboxLogger();
+        try
+        {
+            await using (var failingDb = fixture.CreateContext())
+            {
+                await Assert.ThrowsAsync<DbUpdateException>(() =>
+                    new OutboxProcessor(failingDb, publisher, TimeProvider.System,
+                        Options.Create(new OutboxOptions()), logger)
+                    .ProcessBatchAsync(CancellationToken.None));
+            }
+
+            await using var verify = fixture.CreateContext();
+            var row = await verify.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == id);
+            Assert.Equal(0, row.PublishAttempts);
+            Assert.Null(row.NextAttemptAt);
+            Assert.Null(row.PublishedAt);
+            Assert.Empty(failures);
+            Assert.DoesNotContain(6101, logger.EventIds);
+        }
+        finally
+        {
+            await using var cleanup = fixture.CreateContext();
+            await cleanup.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE outbox_messages DROP CONSTRAINT ck_outbox_retry_telemetry_rollback");
+        }
+
+        // After the constraint is removed, the identical publish failure can commit.
+        await using (var resumed = fixture.CreateContext())
+        {
+            Assert.Equal(0, await new OutboxProcessor(resumed, publisher, TimeProvider.System,
+                Options.Create(new OutboxOptions()), logger)
+                .ProcessBatchAsync(CancellationToken.None));
+        }
+        Assert.Equal([1L], failures);
+        Assert.Equal(1, logger.EventIds.Count(x => x == 6101));
     }
 
     [Fact]
@@ -384,6 +447,22 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
         TimeProvider? clock = null) =>
         new(db, publisher, clock ?? TimeProvider.System, Options.Create(new OutboxOptions()),
             NullLogger<OutboxProcessor>.Instance);
+
+    private sealed class RecordingOutboxLogger : ILogger<OutboxProcessor>
+    {
+        private readonly ConcurrentQueue<int> _eventIds = new();
+        public int[] EventIds => _eventIds.ToArray();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            _eventIds.Enqueue(eventId.Id);
+        }
+    }
 
     private sealed class RecordingPublisher : IOutboxMessagePublisher
     {
