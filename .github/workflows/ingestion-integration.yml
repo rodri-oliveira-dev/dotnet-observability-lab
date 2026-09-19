@@ -29,13 +29,16 @@ jobs:
       - name: PostgreSQL integration tests
         run: dotnet test ./tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj --configuration Release --no-build
       - name: ADR Guard
+        if: always()
         run: |
           dotnet tool restore
           dotnet tool run adr-guard check docs/adr
       - uses: actions/setup-node@v4
+        if: always()
         with:
           node-version: '22'
       - name: LikeC4 validation
+        if: always()
         run: |
           npm ci
           npm run architecture:validate
