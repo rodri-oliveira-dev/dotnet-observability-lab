@@ -17,21 +17,10 @@ var postgres = builder.AddPostgres("postgres", password: postgresPassword)
     .WithInitFiles("postgres-init")
     .WithDataVolume();
 
-var ingestionDatabase = postgres
-    .AddDatabase("ingestion-db", "ingestion_db")
-    .WithCreationScript("""
-        CREATE DATABASE "ingestion_db" OWNER "ingestion_app";
-        REVOKE CONNECT ON DATABASE "ingestion_db" FROM PUBLIC;
-        GRANT CONNECT ON DATABASE "ingestion_db" TO "ingestion_app";
-        """);
-
-var consolidationDatabase = postgres
-    .AddDatabase("consolidation-db", "consolidation_db")
-    .WithCreationScript("""
-        CREATE DATABASE "consolidation_db" OWNER "consolidation_app";
-        REVOKE CONNECT ON DATABASE "consolidation_db" FROM PUBLIC;
-        GRANT CONNECT ON DATABASE "consolidation_db" TO "consolidation_app";
-        """);
+// The PostgreSQL bootstrap script creates these databases with their boundary-specific owners.
+// Aspire registers them here for readiness checks and resource discovery.
+var ingestionDatabase = postgres.AddDatabase("ingestion-db", "ingestion_db");
+var consolidationDatabase = postgres.AddDatabase("consolidation-db", "consolidation_db");
 
 var postgresEndpoint = postgres.Resource.PrimaryEndpoint;
 
