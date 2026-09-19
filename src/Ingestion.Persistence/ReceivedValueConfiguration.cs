@@ -7,6 +7,7 @@ public sealed class ReceivedValueConfiguration : IEntityTypeConfiguration<Receiv
 {
     public void Configure(EntityTypeBuilder<ReceivedValue> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("received_values");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();

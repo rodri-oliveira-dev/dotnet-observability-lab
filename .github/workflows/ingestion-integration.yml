@@ -28,3 +28,16 @@ jobs:
         run: dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
       - name: PostgreSQL integration tests
         run: dotnet test ./tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj --configuration Release --no-build
+      - name: ADR Guard
+        run: |
+          dotnet tool restore
+          dotnet tool run adr-guard check docs/adr
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: LikeC4 validation
+        run: |
+          npm ci
+          npm run architecture:validate
+          npm run architecture:format:check
+          npm run architecture:build

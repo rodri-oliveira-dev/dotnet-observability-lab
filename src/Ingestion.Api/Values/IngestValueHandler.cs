@@ -16,6 +16,14 @@ public sealed class IngestValueHandler(
     TimeProvider timeProvider,
     ILogger<IngestValueHandler> logger)
 {
+    private static readonly Action<ILogger, Exception?> CacheReadFailure =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(1001, "IdempotencyCacheLookupFailed"),
+            "Idempotency cache lookup failed; falling back to PostgreSQL.");
+
+    private static readonly Action<ILogger, Exception?> CacheWriteFailure =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(1002, "IdempotencyCacheWriteFailed"),
+            "Idempotency cache write failed; committed PostgreSQL state is authoritative.");
+
     private static readonly DistributedCacheEntryOptions CacheOptions = new()
     {
         AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
@@ -104,7 +112,7 @@ public sealed class IngestValueHandler(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogWarning(exception, "Idempotency cache lookup failed; falling back to PostgreSQL.");
+            CacheReadFailure(logger, exception);
             return null;
         }
     }
@@ -118,7 +126,7 @@ public sealed class IngestValueHandler(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogWarning(exception, "Idempotency cache write failed; committed PostgreSQL state is authoritative.");
+            CacheWriteFailure(logger, exception);
         }
     }
 

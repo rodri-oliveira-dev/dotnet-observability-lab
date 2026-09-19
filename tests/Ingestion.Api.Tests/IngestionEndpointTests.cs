@@ -19,8 +19,7 @@ namespace Ingestion.Api.Tests;
 
 public sealed class IngestionDatabaseFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("ingestion_db")
         .WithUsername("postgres")
         .WithPassword(Guid.NewGuid().ToString("N"))
@@ -35,14 +34,20 @@ public sealed class IngestionDatabaseFixture : IAsyncLifetime
             .UseNpgsql(_postgres.GetConnectionString()).Options);
 
     public WebApplicationFactory<Program> CreateFactory(bool cacheUnavailable = false, TimeProvider? clock = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(webHost =>
+        new IngestionWebApplicationFactory(_postgres.GetConnectionString(), cacheUnavailable, clock);
+
+    private sealed class IngestionWebApplicationFactory(
+        string connectionString, bool cacheUnavailable, TimeProvider? clock) : WebApplicationFactory<Program>
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            webHost.ConfigureAppConfiguration((_, configuration) =>
+            builder.ConfigureAppConfiguration((_, configuration) =>
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:ingestion-db"] = _postgres.GetConnectionString()
+                    ["ConnectionStrings:ingestion-db"] = connectionString
                 }));
-            webHost.ConfigureTestServices(services =>
+
+            builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IDistributedCache>();
                 if (cacheUnavailable)
@@ -60,7 +65,8 @@ public sealed class IngestionDatabaseFixture : IAsyncLifetime
                     services.AddSingleton(clock);
                 }
             });
-        });
+        }
+    }
 
     private sealed class UnavailableCache : IDistributedCache
     {
