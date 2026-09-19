@@ -23,15 +23,19 @@ public sealed class OutboxProcessor(
 {
     private static readonly ActivitySource Traces = new("Ingestion.Outbox.Worker");
 
-    private static readonly Action<ILogger, Guid, DateTimeOffset, Exception?> PublishFailed =
-        LoggerMessage.Define<Guid, DateTimeOffset>(LogLevel.Warning, new EventId(6101, "OutboxPublishFailed"),
-            "Outbox publication failed for message {MessageId}; next retry at {NextAttemptAt}.");
-    private static readonly Action<ILogger, Guid, string, Exception?> Quarantined =
-        LoggerMessage.Define<Guid, string>(LogLevel.Error, new EventId(6104, "OutboxMessageQuarantined"),
-            "Outbox message {MessageId} quarantined: {Reason}. Manual correction is required.");
-    private static readonly Action<ILogger, Guid, Exception?> Published =
-        LoggerMessage.Define<Guid>(LogLevel.Information, new EventId(6102, "OutboxPublished"),
-            "Outbox message {MessageId} confirmed and marked published.");
+    private static readonly Action<ILogger, Guid, Guid, DateTimeOffset, Exception?> PublishFailed =
+        LoggerMessage.Define<Guid, Guid, DateTimeOffset>(LogLevel.Warning,
+            new EventId(6101, "OutboxPublishFailed"),
+            "Outbox publish attempt failed for message {MessageId}, value {ValueId}; next retry at {NextAttemptAt}.");
+    private static readonly Action<ILogger, Guid, Guid, string, Exception?> Quarantined =
+        LoggerMessage.Define<Guid, Guid, string>(LogLevel.Error, new EventId(6104, "OutboxMessageQuarantined"),
+            "Outbox message {MessageId} for value {ValueId} quarantined: {Reason}. Manual correction is required.");
+    private static readonly Action<ILogger, Guid, Guid, Exception?> Published =
+        LoggerMessage.Define<Guid, Guid>(LogLevel.Information, new EventId(6102, "OutboxPublished"),
+            "Outbox message {MessageId} for value {ValueId} confirmed and marked published.");
+    private static readonly Action<ILogger, Exception?> PendingCountFailure =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(6105, "OutboxBacklogMeasurementFailed"),
+            "Outbox backlog measurement unavailable; publishing is unaffected.");
 
     public async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
     {
@@ -95,6 +99,7 @@ public sealed class OutboxProcessor(
                     using var publishDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
                     await publisher.PublishAsync(message, row.Payload, publishDeadline.Token);
 
+                    dispatch?.SetTag("outbox.status", "broker_confirmed");
                     row.PublishedAt = clock.GetUtcNow();
                     row.NextAttemptAt = null;
                     published++;
@@ -113,7 +118,8 @@ public sealed class OutboxProcessor(
                     var retrySeconds = Math.Min(options.Value.MaxRetryDelay.TotalSeconds,
                         options.Value.RetryDelay.TotalSeconds * multiplier);
                     row.NextAttemptAt = clock.GetUtcNow().AddSeconds(retrySeconds);
-                    PublishFailed(logger, row.Id, row.NextAttemptAt.Value, exception);
+                    OutboxTelemetry.PublicationFailures.Add(1);
+                    PublishFailed(logger, row.Id, row.ValueId, row.NextAttemptAt.Value, exception);
                 }
             }
 
@@ -122,7 +128,22 @@ public sealed class OutboxProcessor(
 
             foreach (var row in messages.Where(x => x.PublishedAt is not null))
             {
-                Published(logger, row.Id, null);
+                // Count only confirmed publications durably marked after the transaction commits.
+                OutboxTelemetry.PublishedMessages.Add(1);
+                Published(logger, row.Id, row.ValueId, null);
+            }
+
+            // Sample the complete pending backlog, including deferred retries, rather than
+            // inferring it from the bounded claimed batch. Observability is best-effort.
+            try
+            {
+                long pending = await database.OutboxMessages.AsNoTracking().LongCountAsync(
+                    x => x.PublishedAt == null && x.QuarantinedAt == null, cancellationToken);
+                OutboxTelemetry.PendingMessages.Record(pending);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                PendingCountFailure(logger, exception);
             }
 
             return published;
@@ -133,6 +154,6 @@ public sealed class OutboxProcessor(
     {
         row.QuarantinedAt = clock.GetUtcNow();
         row.QuarantineReason = reason;
-        Quarantined(logger, row.Id, reason, null);
+        Quarantined(logger, row.Id, row.ValueId, reason, null);
     }
 }
