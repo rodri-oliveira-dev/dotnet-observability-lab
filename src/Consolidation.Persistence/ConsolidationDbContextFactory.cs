@@ -8,6 +8,7 @@ public sealed class ConsolidationDbContextFactory : IDesignTimeDbContextFactory<
     private const string DefaultDesignTimeConnectionString =
         "Host=127.0.0.1;Database=consolidation_db;Username=postgres";
 
+    /// <inheritdoc />
     public ConsolidationDbContext CreateDbContext(string[] args)
     {
         var connectionString = Environment.GetEnvironmentVariable("CONSOLIDATION_DB_CONNECTION_STRING")

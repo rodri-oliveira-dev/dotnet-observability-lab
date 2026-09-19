@@ -40,31 +40,31 @@ model {
     ingestionApi = container "Ingestion.Api" {
       #api
       technology ".NET 10 / ASP.NET Core Minimal API"
-      description "Write-side HTTP boundary. Owns ingestion_db access and receives Redis only for the later HTTP idempotency fast path."
+      description "Write-side HTTP boundary. Uses ingestion_db through the non-superuser ingestion_app role and receives Redis only for the later HTTP idempotency fast path."
     }
 
     ingestionOutboxWorker = container "Ingestion.Outbox.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Dedicated write-side background process. Owns ingestion_db access; Outbox publication behavior is introduced later."
+      description "Dedicated write-side background process. Uses ingestion_db through ingestion_app; Outbox publication behavior is introduced later."
     }
 
     consolidationApi = container "Consolidation.Api" {
       #api
       technology ".NET 10 / ASP.NET Core Minimal API"
-      description "Read-side HTTP boundary. Reads only consolidation_db and has no Redis or ingestion runtime dependency."
+      description "Read-side HTTP boundary. Reads only consolidation_db through the non-superuser consolidation_app role."
     }
 
     consolidationWorker = container "Consolidation.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Dedicated read-side background process. Owns consolidation_db access and receives Redis only for the later duplicate-message fast path."
+      description "Dedicated read-side background process. Uses consolidation_db through consolidation_app and receives Redis only for the later duplicate-message fast path."
     }
 
     postgresql = container "PostgreSQL" {
       #database
       technology "PostgreSQL"
-      description "One local PostgreSQL server resource hosting two separately owned logical databases: ingestion_db and consolidation_db."
+      description "One local PostgreSQL server hosting ingestion_db and consolidation_db with distinct non-superuser application roles and revoked public database access."
     }
 
     redis = container "Redis" {
@@ -105,10 +105,10 @@ model {
   apiClient -> lab.ingestionApi "Submits values in the target write flow"
   apiClient -> lab.consolidationApi "Reads the consolidated result in the target read flow"
 
-  lab.ingestionApi -> lab.postgresql "Uses ingestion_db only"
-  lab.ingestionOutboxWorker -> lab.postgresql "Uses ingestion_db only"
-  lab.consolidationApi -> lab.postgresql "Uses consolidation_db only"
-  lab.consolidationWorker -> lab.postgresql "Uses consolidation_db only"
+  lab.ingestionApi -> lab.postgresql "Uses ingestion_db as ingestion_app"
+  lab.ingestionOutboxWorker -> lab.postgresql "Uses ingestion_db as ingestion_app"
+  lab.consolidationApi -> lab.postgresql "Uses consolidation_db as consolidation_app"
+  lab.consolidationWorker -> lab.postgresql "Uses consolidation_db as consolidation_app"
 
   lab.ingestionApi -> lab.redis "Receives Redis for HTTP idempotency fast path"
   lab.consolidationWorker -> lab.redis "Receives Redis for message deduplication fast path"

@@ -45,12 +45,12 @@ The four executable processes are:
 
 The current data topology is one Aspire-managed PostgreSQL server resource containing two separately owned logical databases:
 
-| Boundary | Database | Allowed processes |
-| --- | --- | --- |
-| Ingestion | `ingestion_db` | `Ingestion.Api`, `Ingestion.Outbox.Worker` |
-| Consolidation | `consolidation_db` | `Consolidation.Api`, `Consolidation.Worker` |
+| Boundary | Database | Application role | Allowed processes |
+| --- | --- | --- | --- |
+| Ingestion | `ingestion_db` | `ingestion_app` | `Ingestion.Api`, `Ingestion.Outbox.Worker` |
+| Consolidation | `consolidation_db` | `consolidation_app` | `Consolidation.Api`, `Consolidation.Worker` |
 
-No process receives the other boundary's database reference.
+The PostgreSQL administrator credential is used only by the local PostgreSQL resource for provisioning and health operations. It is not injected into application processes.
 
 Redis is also a current Aspire resource, but it is deliberately wired only to:
 
@@ -79,14 +79,33 @@ The local environment deliberately uses one PostgreSQL container for operational
 
 Rules:
 
-- `ingestion_db` is owned only by the ingestion boundary;
-- `consolidation_db` is owned only by the consolidation boundary;
+- `ingestion_db` is owned by the non-superuser `ingestion_app` role;
+- `consolidation_db` is owned by the non-superuser `consolidation_app` role;
+- `PUBLIC CONNECT` is revoked from both application databases;
+- each application role is granted `CONNECT` only to its own database;
+- the application connection strings never contain the PostgreSQL administrator credential;
 - no cross-database queries;
 - no shared tables;
 - each boundary owns its EF Core mappings and migrations;
 - schema changes create new migrations rather than rewriting migration history.
 
+Because PostgreSQL 15+ makes the current database owner the implicit `pg_database_owner`, the owner governs the database's `public` schema. This lets each boundary run its own EF migrations without granting a cross-boundary or superuser role.
+
 The local single-server topology is not a production deployment decision.
+
+## Local credential lifecycle
+
+The PostgreSQL data volume persists across AppHost restarts, so the administrator and boundary-role passwords must remain stable for the lifetime of that volume.
+
+The AppHost declares these secret parameters:
+
+- `postgres-password`
+- `ingestion-db-password`
+- `consolidation-db-password`
+
+Set them using `aspire secret set` (or another standard .NET configuration source) rather than source-controlled configuration.
+
+The PostgreSQL init script creates the two non-superuser application roles only when a new PostgreSQL data volume is initialized. If a disposable local volume predates these roles, recreate that volume once. If the data is not disposable, migrate it and alter the roles/passwords instead of deleting the volume.
 
 ## EF Core migration bootstrap
 
@@ -116,7 +135,7 @@ dotnet ef migrations add <MigrationName> \
 
 The design-time factories use a local, passwordless placeholder connection string because migration generation does not require a live database. Set `INGESTION_DB_CONNECTION_STRING` or `CONSOLIDATION_DB_CONNECTION_STRING` when a design-time operation actually needs to connect to a database.
 
-Runtime applications do not use those environment variables; Aspire injects the owned database references.
+Runtime applications do not use those environment variables; the AppHost injects only the role-specific connection string for the boundary-owned database.
 
 ## Aspire and OpenTelemetry
 

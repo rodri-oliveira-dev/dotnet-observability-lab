@@ -13,6 +13,7 @@ The current baseline provides:
 - `Consolidation.Api`
 - `Consolidation.Worker`
 - one Aspire-managed PostgreSQL server with `ingestion_db` and `consolidation_db`
+- distinct non-superuser PostgreSQL roles for the ingestion and consolidation boundaries
 - Redis as an auxiliary optimization resource
 - `DotNetObservabilityLab.AppHost`
 - `DotNetObservabilityLab.ServiceDefaults`
@@ -33,8 +34,9 @@ Core boundary rules:
 - the two APIs never call each other;
 - `Consolidation.*` must not depend on `Ingestion.*`;
 - `Ingestion.*` must not depend on `Consolidation.*`;
-- `Ingestion.*` can access only `ingestion_db`;
-- `Consolidation.*` can access only `consolidation_db`;
+- `Ingestion.*` can access only `ingestion_db` using the `ingestion_app` role;
+- `Consolidation.*` can access only `consolidation_db` using the `consolidation_app` role;
+- the PostgreSQL administrator credential is reserved for local provisioning/health and is not injected into application processes;
 - Redis is an optimization, never the durable source of truth;
 - ServiceDefaults contains only cross-cutting Aspire defaults;
 - integration contracts belong in `Contracts`, not in either service's domain model.
@@ -74,6 +76,22 @@ dotnet tool run adr-guard index docs/adr
 
 See [docs/architecture/README.md](docs/architecture/README.md) for database ownership, C4 levels, migration commands, model conventions, and maintenance rules.
 
+## Local PostgreSQL secrets
+
+The persistent PostgreSQL volume requires stable credentials across AppHost runs. Store the three local passwords in the AppHost user-secrets store before the first run:
+
+```bash
+aspire secret set Parameters:postgres-password <postgres-admin-password> --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj
+aspire secret set Parameters:ingestion-db-password <ingestion-role-password> --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj
+aspire secret set Parameters:consolidation-db-password <consolidation-role-password> --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj
+```
+
+Do not commit these values. The AppHost has a `UserSecretsId`, so the secrets are stored outside the repository.
+
+If a disposable PostgreSQL data volume was created before these stable credentials and boundary roles were introduced, stop the AppHost and recreate that local volume once. Use `docker volume ls` (or the equivalent command for your container runtime) to identify the AppHost PostgreSQL data volume, then remove only that disposable development volume. Existing non-disposable data should be migrated instead of deleted.
+
+Changing any of these passwords later also requires updating the corresponding PostgreSQL role/password in the existing volume or recreating a disposable local volume.
+
 ## Run
 
 Start the AppHost:
@@ -93,7 +111,7 @@ The Aspire Dashboard should show:
 - `consolidation-db`
 - `redis`
 
-The APIs and workers receive only their owned PostgreSQL database reference. Redis is referenced only by `Ingestion.Api` and `Consolidation.Worker`.
+The applications receive only role-specific PostgreSQL connection strings for their owned database. Redis is referenced only by `Ingestion.Api` and `Consolidation.Worker`.
 
 ## Repository conventions
 
