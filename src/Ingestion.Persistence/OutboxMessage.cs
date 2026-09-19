@@ -10,4 +10,6 @@ public sealed class OutboxMessage
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset? QuarantinedAt { get; set; }
     public string? QuarantineReason { get; set; }
+    public int PublishAttempts { get; set; }
+    public DateTimeOffset? NextAttemptAt { get; set; }
 }

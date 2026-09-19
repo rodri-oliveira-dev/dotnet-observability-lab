@@ -1,14 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace Ingestion.Persistence.Migrations;
 
-[DbContext(typeof(IngestionDbContext))]
-public sealed class IngestionDbContextModelSnapshot : ModelSnapshot
+public partial class OutboxRetrySchedule
 {
-    protected override void BuildModel(ModelBuilder modelBuilder) => ConfigureModel(modelBuilder);
-
-    internal static void ConfigureModel(ModelBuilder modelBuilder)
+    protected override void BuildTargetModel(ModelBuilder modelBuilder)
     {
         modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 

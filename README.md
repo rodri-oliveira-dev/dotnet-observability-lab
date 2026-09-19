@@ -161,7 +161,8 @@ Connect to `ingestion_db` with the ingestion application credentials and
 inspect the pending-to-confirmed transition:
 
 ```sql
-SELECT "Id", event_type, occurred_at, published_at, quarantined_at, quarantine_reason
+SELECT "Id", event_type, occurred_at, published_at, quarantined_at, quarantine_reason,
+       publish_attempts, next_attempt_at
 FROM outbox_messages
 ORDER BY occurred_at DESC
 LIMIT 20;
@@ -170,16 +171,18 @@ LIMIT 20;
 `published_at` is set only after the broker confirms publication. Unsupported event types,
 malformed JSON and invalid message identities are quarantined with a reason and skipped
 by subsequent polls; inspect and repair them deliberately rather than repeatedly retrying
-poison rows. A transport failure or publish timeout does **not** quarantine the row.
-To test
-retry, stop RabbitMQ, restart the API briefly to POST another value, then
+poison rows. A transport failure or publish timeout does **not** quarantine the row:
+its persisted `next_attempt_at` postpones another attempt, using bounded exponential
+backoff so failed messages do not repeatedly occupy the oldest pending batch.
+To test retry, stop RabbitMQ, restart the API briefly to POST another value, then
 stop the API. That Outbox row stays pending until RabbitMQ returns. A crash
 between broker confirmation and database commit can lead to a duplicate
 event with the **same** message ID; the consumer will require an Inbox.
 
 The worker's `Outbox` settings are `BatchSize` (default 10, maximum 100),
-`PollInterval` (default 2 seconds), and `PublishTimeout` (default 10
-seconds). Multiple worker instances use `FOR UPDATE SKIP LOCKED` rather
+`PollInterval` (default 2 seconds), `PublishTimeout` (default 10 seconds),
+`RetryDelay` (default 5 seconds) and `MaxRetryDelay` (default 5 minutes).
+The retry counter and next-attempt time survive worker restarts. Multiple worker instances use `FOR UPDATE SKIP LOCKED` rather
 than a Redis lock. The worker does not require a running HTTP API.
 
 Outbox integration tests require a Docker-compatible engine:

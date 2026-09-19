@@ -12,6 +12,9 @@ builder.Services.AddOptions<OutboxOptions>()
     .Validate(x => x.BatchSize is > 0 and <= 100, "Outbox batch size must be between 1 and 100.")
     .Validate(x => x.PollInterval >= TimeSpan.FromMilliseconds(100), "Outbox polling interval must be at least 100 ms.")
     .Validate(x => x.PublishTimeout >= TimeSpan.FromSeconds(1), "Outbox publish timeout must be at least 1 second.")
+    .Validate(x => x.RetryDelay >= TimeSpan.FromSeconds(1), "Outbox retry delay must be at least 1 second.")
+    .Validate(x => x.MaxRetryDelay >= x.RetryDelay && x.MaxRetryDelay <= TimeSpan.FromHours(1),
+        "Outbox maximum retry delay must be at least the initial delay and no more than one hour.")
     .ValidateOnStart();
 builder.Services.AddScoped<OutboxProcessor>();
 builder.Services.AddSingleton<IOutboxMessagePublisher, RabbitMqOutboxMessagePublisher>();

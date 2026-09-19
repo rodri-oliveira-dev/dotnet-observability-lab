@@ -19,9 +19,9 @@ public sealed class OutboxProcessor(
     IOptions<OutboxOptions> options,
     ILogger<OutboxProcessor> logger)
 {
-    private static readonly Action<ILogger, Guid, Exception?> PublishFailed =
-        LoggerMessage.Define<Guid>(LogLevel.Warning, new EventId(6101, "OutboxPublishFailed"),
-            "Outbox publication failed for message {MessageId}; record remains pending.");
+    private static readonly Action<ILogger, Guid, DateTimeOffset, Exception?> PublishFailed =
+        LoggerMessage.Define<Guid, DateTimeOffset>(LogLevel.Warning, new EventId(6101, "OutboxPublishFailed"),
+            "Outbox publication failed for message {MessageId}; next retry at {NextAttemptAt}.");
     private static readonly Action<ILogger, Guid, string, Exception?> Quarantined =
         LoggerMessage.Define<Guid, string>(LogLevel.Error, new EventId(6104, "OutboxMessageQuarantined"),
             "Outbox message {MessageId} quarantined: {Reason}. Manual correction is required.");
@@ -38,8 +38,9 @@ public sealed class OutboxProcessor(
 
             // Npgsql's FOR UPDATE SKIP LOCKED is safe across multiple worker instances.
             // No cache/distributed lock and no transaction across PostgreSQL and RabbitMQ.
+            var now = clock.GetUtcNow();
             var messages = await database.OutboxMessages.FromSqlInterpolated(
-                    $"SELECT * FROM outbox_messages WHERE published_at IS NULL AND quarantined_at IS NULL ORDER BY occurred_at, \"Id\" LIMIT {options.Value.BatchSize} FOR UPDATE SKIP LOCKED")
+                    $"SELECT * FROM outbox_messages WHERE published_at IS NULL AND quarantined_at IS NULL AND (next_attempt_at IS NULL OR next_attempt_at <= {now}) ORDER BY occurred_at, \"Id\" LIMIT {options.Value.BatchSize} FOR UPDATE SKIP LOCKED")
                 .ToListAsync(cancellationToken);
 
             int published = 0;
@@ -79,6 +80,7 @@ public sealed class OutboxProcessor(
                     await publisher.PublishAsync(message, row.Payload, publishDeadline.Token);
 
                     row.PublishedAt = clock.GetUtcNow();
+                    row.NextAttemptAt = null;
                     published++;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -87,8 +89,15 @@ public sealed class OutboxProcessor(
                 }
                 catch (Exception exception)
                 {
-                    PublishFailed(logger, row.Id, exception);
-                    // Do not mark this row or spin on it within this batch.
+                    // Persist cooldown in the same PostgreSQL transaction as the batch.
+                    // This keeps a failed early batch from starving later eligible messages.
+                    row.PublishAttempts = row.PublishAttempts < int.MaxValue
+                        ? row.PublishAttempts + 1 : int.MaxValue;
+                    var multiplier = 1 << Math.Min(row.PublishAttempts - 1, 6);
+                    var retrySeconds = Math.Min(options.Value.MaxRetryDelay.TotalSeconds,
+                        options.Value.RetryDelay.TotalSeconds * multiplier);
+                    row.NextAttemptAt = clock.GetUtcNow().AddSeconds(retrySeconds);
+                    PublishFailed(logger, row.Id, row.NextAttemptAt.Value, exception);
                 }
             }
 

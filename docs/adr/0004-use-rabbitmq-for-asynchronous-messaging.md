@@ -54,8 +54,11 @@ Permanently invalid Outbox rows (unknown event type, malformed JSON or invalid
 message identity) are marked as quarantined in the ingestion database and omitted
 from future polling batches, preventing poison messages from starving later events.
 Their error reason remains available for inspection and deliberate remediation;
-transient transport failures and timeouts do not quarantine rows. The publish
-timeout is controlled by the injected TimeProvider to support deterministic tests.
+transient transport failures and timeouts do not quarantine rows: their attempt count
+and next eligible retry time are persisted with bounded exponential backoff. The
+publisher skips not-yet-eligible rows so retries cannot starve later events.
+The publish timeout and retry schedule are controlled by the injected TimeProvider
+to support deterministic tests.
 Consuming, acknowledgements and Inbox processing remain for later issues.
 
 ## Alternatives considered

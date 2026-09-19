@@ -91,7 +91,7 @@ model {
     rabbitmq = container "RabbitMQ" {
       #broker
       technology "RabbitMQ / AMQP 0-9-1"
-      description "Aspire-managed broker with management UI and persistent storage. The consolidation worker declares the durable direct lab.events.v1 exchange and durable consolidation.value-received.v1 queue bound by value.received.v1. Publisher and consumer loops follow in later issues."
+      description "Aspire-managed broker with management UI and persistent storage. Both workers declare the durable direct lab.events.v1 exchange and durable consolidation.value-received.v1 queue bound by value.received.v1. The ingestion Outbox worker already polls and publishes confirmed events; the consolidation consumer/Inbox is planned for a later issue."
     }
   }
 
