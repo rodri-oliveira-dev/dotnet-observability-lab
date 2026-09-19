@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
@@ -115,6 +117,40 @@ public sealed class IngestionDatabaseFixture : IAsyncLifetime
 public sealed class IngestionEndpointTests(IngestionDatabaseFixture fixture)
     : IClassFixture<IngestionDatabaseFixture>
 {
+    [Fact]
+    public async Task Durable_write_and_replays_emit_bounded_application_metrics()
+    {
+        var measurements = new ConcurrentQueue<(string Name, long Count, string? Result, int Labels)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == "Ingestion.Api" && instrument.Name.StartsWith("lab.ingestion.", StringComparison.Ordinal))
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, count, tags, _) =>
+        {
+            var dimensions = tags.ToArray();
+            measurements.Enqueue((instrument.Name, count,
+                dimensions.FirstOrDefault(x => x.Key == "result").Value as string, dimensions.Length));
+        });
+        listener.Start();
+
+        using var factory = fixture.CreateFactory();
+        using var client = factory.CreateClient();
+        string key = NewKey();
+        using var first = await PostAsync(client, key, 13m);
+        using var repeated = await PostAsync(client, key, 13m);
+        using var conflict = await PostAsync(client, key, 14m);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+
+        Assert.Contains(measurements, x => x is { Name: "lab.ingestion.values.accepted", Count: 1, Labels: 0 });
+        Assert.Contains(measurements, x => x is { Name: "lab.ingestion.requests.duplicate", Count: 1, Result: "replayed", Labels: 1 });
+        Assert.Contains(measurements, x => x is { Name: "lab.ingestion.requests.duplicate", Count: 1, Result: "conflict", Labels: 1 });
+        Assert.All(measurements, x => Assert.True(x.Labels <= 1));
+    }
+
     [Fact]
     public async Task New_value_commits_one_value_and_corresponding_outbox_event()
     {
