@@ -75,17 +75,17 @@ public sealed class IngestValueHandler(
 
         try
         {
-            await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
             database.ReceivedValues.Add(received);
             database.OutboxMessages.Add(outbox);
+            // A single SaveChanges transaction commits both inserts atomically.
+            // Do not start a user transaction outside Aspire's Npgsql retrying execution strategy.
             await database.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException
             { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "ux_received_values_idempotency_key" })
         {
-            // PostgreSQL resolves the concurrent insert race. The losing transaction is rolled back
-            // when disposed; its tracked entities must not participate in the subsequent read.
+            // PostgreSQL resolves concurrent inserts. EF rolls back the failed SaveChanges
+            // transaction; the losing entries must not participate in the subsequent read.
             database.ChangeTracker.Clear();
             var winner = await database.ReceivedValues.AsNoTracking()
                 .SingleAsync(x => x.IdempotencyKey == idempotencyKey, cancellationToken);
