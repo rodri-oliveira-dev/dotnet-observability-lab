@@ -59,7 +59,18 @@ Redis is also a current Aspire resource, but it is deliberately wired only to:
 
 Redis is not persistent correctness state. PostgreSQL remains authoritative.
 
-RabbitMQ remains a **future placeholder** until its dedicated implementation issue.
+RabbitMQ is now an Aspire-managed broker with persistent data, management UI, and a
+worker-owned durable direct exchange (`lab.events.v1`) bound to a durable queue
+(`consolidation.value-received.v1`) by routing key `value.received.v1`.
+Only `Ingestion.Outbox.Worker` and `Consolidation.Worker` receive the RabbitMQ
+reference; the consolidation worker declares the topology when it starts.
+Both APIs remain independent of the broker. Outbox publishing and Inbox
+consumption/acknowledgements are implemented by subsequent issues.
+
+The transport contract is **at-least-once**: a future consumer must persist the
+Inbox identity with the read-model update and tolerate redelivery. See
+[ValueReceived.v1](../events/ValueReceived.v1.md) for contract fields and
+transport metadata.
 
 The `Contracts` and `*.Persistence` projects are not shown as runtime containers because they are code/build dependencies, not separately running processes.
 
