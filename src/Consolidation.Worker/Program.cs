@@ -1,4 +1,5 @@
 using Consolidation.Persistence;
+using Consolidation.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 

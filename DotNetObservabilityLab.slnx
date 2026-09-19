@@ -9,6 +9,7 @@
     <Project Path="src/Ingestion.Api/Ingestion.Api.csproj" />
     <Project Path="src/Ingestion.Outbox.Worker/Ingestion.Outbox.Worker.csproj" />
     <Project Path="src/Ingestion.Persistence/Ingestion.Persistence.csproj" />
+    <Project Path="src/Messaging/Messaging.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj" />
