@@ -105,8 +105,8 @@ jobs:
 
                 if echo "$databases" | grep -qx 'consolidation_db' &&
                    echo "$databases" | grep -qx 'ingestion_db' &&
-                   echo "$roles" | grep -qx 'consolidation_app:false' &&
-                   echo "$roles" | grep -qx 'ingestion_app:false'; then
+                   echo "$roles" | grep -qx 'consolidation_app:f' &&
+                   echo "$roles" | grep -qx 'ingestion_app:f'; then
                   break
                 fi
               fi
