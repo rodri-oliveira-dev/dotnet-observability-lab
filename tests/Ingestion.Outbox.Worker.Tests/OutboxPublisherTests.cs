@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using System.Diagnostics;
 using System.Text;
 using System.Collections.Concurrent;
@@ -82,6 +83,40 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
         Assert.Equal(ActivityKind.Producer, publisher.ObservedActivity.Kind);
         Assert.Equal(expectedTraceId, publisher.ObservedActivity.TraceId);
         Assert.Equal(expectedParentSpanId, publisher.ObservedActivity.ParentSpanId);
+    }
+
+    [Fact]
+    public async Task Failed_then_confirmed_publication_emits_failure_success_and_full_backlog_metrics()
+    {
+        var measurements = new ConcurrentQueue<(string Name, long Count, int TagCount)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == "Ingestion.Outbox.Worker")
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, count, tags, _) =>
+            measurements.Enqueue((instrument.Name, count, tags.Length)));
+        listener.Start();
+
+        Guid id = await SeedAsync();
+        var clock = new ManualTimeProvider();
+        var publisher = new RecordingPublisher { Fail = true };
+        await using var database = fixture.CreateContext();
+        var processor = CreateProcessor(database, publisher, clock);
+        Assert.Equal(0, await processor.ProcessBatchAsync(CancellationToken.None));
+        Assert.Contains(measurements, x => x is { Name: "lab.outbox.messages.publish_failures", Count: 1 });
+        Assert.Contains(measurements, x => x.Name == "lab.outbox.messages.pending" && x.Count >= 1);
+
+        publisher.Fail = false;
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, await processor.ProcessBatchAsync(CancellationToken.None));
+        Assert.Equal([id], publisher.Ids);
+        Assert.Contains(measurements, x => x is { Name: "lab.outbox.messages.published", Count: 1 });
+        long pending = await database.OutboxMessages.AsNoTracking().LongCountAsync(
+            x => x.PublishedAt == null && x.QuarantinedAt == null);
+        Assert.Equal(pending, measurements.Last(x => x.Name == "lab.outbox.messages.pending").Count);
+        Assert.All(measurements, x => Assert.Equal(0, x.TagCount));
     }
 
     [Fact]
