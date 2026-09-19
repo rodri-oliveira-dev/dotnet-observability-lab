@@ -49,6 +49,10 @@ public sealed class ConsolidatedEndpointTests(ConsolidationDatabaseFixture fixtu
     [Fact]
     public async Task Empty_database_returns_stable_zero_snapshot()
     {
+        // xUnit does not guarantee test method order; reset the shared fixture's read row.
+        await using (var database = fixture.CreateContext())
+            await database.ConsolidatedTotals.ExecuteDeleteAsync();
+
         using var factory = fixture.CreateFactory();
         using var client = factory.CreateClient();
 
