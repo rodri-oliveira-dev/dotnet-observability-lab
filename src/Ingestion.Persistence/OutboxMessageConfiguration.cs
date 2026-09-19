@@ -16,6 +16,10 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(x => x.Payload).HasColumnName("payload").HasColumnType("text").IsRequired();
         builder.Property(x => x.OccurredAt).HasColumnName("occurred_at").IsRequired();
         builder.Property(x => x.PublishedAt).HasColumnName("published_at");
+        builder.Property(x => x.QuarantinedAt).HasColumnName("quarantined_at");
+        builder.Property(x => x.QuarantineReason).HasColumnName("quarantine_reason").HasMaxLength(200);
+        builder.Property(x => x.PublishAttempts).HasColumnName("publish_attempts").HasDefaultValue(0).IsRequired();
+        builder.Property(x => x.NextAttemptAt).HasColumnName("next_attempt_at");
         builder.HasIndex(x => x.ValueId).IsUnique().HasDatabaseName("ux_outbox_messages_value_id");
         builder.HasOne<ReceivedValue>().WithMany().HasForeignKey(x => x.ValueId).OnDelete(DeleteBehavior.Restrict);
     }

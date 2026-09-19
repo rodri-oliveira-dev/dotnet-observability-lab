@@ -11,7 +11,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Contracts/Contracts.csproj" />
     <ProjectReference Include="../DotNetObservabilityLab.ServiceDefaults/DotNetObservabilityLab.ServiceDefaults.csproj" />
+    <ProjectReference Include="../Messaging/Messaging.csproj" />
     <ProjectReference Include="../Ingestion.Persistence/Ingestion.Persistence.csproj" />
   </ItemGroup>
 

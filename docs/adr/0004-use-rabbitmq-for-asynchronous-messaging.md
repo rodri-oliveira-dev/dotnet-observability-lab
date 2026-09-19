@@ -33,7 +33,7 @@ The existing `ValueReceivedV1` logical event is versioned as
 `ValueReceived.v1`. Message identity and correlation are kept distinct from
 routing details and provider-specific headers; the existing v1 JSON `EventId`
 continues to identify the durable Outbox event for backward compatibility.
-The future publisher will map this value to the AMQP message ID.
+The independent Outbox publisher maps this value to the AMQP message ID.
 
 Delivery is **at-least-once**, not exactly-once. A publisher can retry after
 uncertain broker confirmation and RabbitMQ can redeliver a message before an
@@ -42,9 +42,24 @@ Inbox message identity and its read-model update in `consolidation_db`; neither
 RabbitMQ acknowledgement nor Redis deduplication alone establishes correctness.
 No ordering guarantee is assumed beyond what a later consumer explicitly defines.
 
-This issue provisions the resource, connection wiring, topology and contract;
-publication, consuming, manual acknowledgements, retries and Inbox processing
-are implemented in separate roadmap issues.
+The independent Outbox worker now polls bounded batches under a PostgreSQL
+transaction using FOR UPDATE SKIP LOCKED; it publishes persistent messages
+using mandatory routing and publisher confirmations, then commits PublishedAt
+only for successfully confirmed events. Failed or timed-out publications remain
+pending and the worker pauses between polling cycles. Another worker skips
+locked rows; a crash after broker acceptance but before database commit can
+still produce duplicates with the same event ID. Both workers idempotently
+declare the same durable topology, even while the other is stopped.
+Permanently invalid Outbox rows (unknown event type, malformed JSON or invalid
+message identity) are marked as quarantined in the ingestion database and omitted
+from future polling batches, preventing poison messages from starving later events.
+Their error reason remains available for inspection and deliberate remediation;
+transient transport failures and timeouts do not quarantine rows: their attempt count
+and next eligible retry time are persisted with bounded exponential backoff. The
+publisher skips not-yet-eligible rows so retries cannot starve later events.
+The publish timeout and retry schedule are controlled by the injected TimeProvider
+to support deterministic tests.
+Consuming, acknowledgements and Inbox processing remain for later issues.
 
 ## Alternatives considered
 
@@ -65,6 +80,6 @@ are implemented in separate roadmap issues.
 - Duplicate messages are part of the contract. The later consumer must use a
   durable Inbox and explicitly control acknowledgement timing.
 - Durable exchange/queue declarations alone do not make individual messages
-  persistent: the future publisher must use persistent delivery and publisher
-  confirmations, and handle unroutable messages and retries.
+  persistent: the publisher uses persistent delivery, mandatory routing and
+  confirmations; unroutable/unconfirmed messages remain pending.
 - Local RabbitMQ credentials must remain stable with its persistent data volume.

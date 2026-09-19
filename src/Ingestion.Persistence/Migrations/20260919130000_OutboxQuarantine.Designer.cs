@@ -1,14 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace Ingestion.Persistence.Migrations;
 
-[DbContext(typeof(IngestionDbContext))]
-public sealed class IngestionDbContextModelSnapshot : ModelSnapshot
+public partial class OutboxQuarantine
 {
-    protected override void BuildModel(ModelBuilder modelBuilder) => ConfigureModel(modelBuilder);
-
-    internal static void ConfigureModel(ModelBuilder modelBuilder)
+    protected override void BuildTargetModel(ModelBuilder modelBuilder)
     {
         modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
@@ -34,8 +30,6 @@ public sealed class IngestionDbContextModelSnapshot : ModelSnapshot
             builder.Property(x => x.PublishedAt).HasColumnName("published_at").HasColumnType("timestamp with time zone");
             builder.Property(x => x.QuarantinedAt).HasColumnName("quarantined_at").HasColumnType("timestamp with time zone");
             builder.Property(x => x.QuarantineReason).HasColumnName("quarantine_reason").HasMaxLength(200);
-            builder.Property(x => x.PublishAttempts).HasColumnName("publish_attempts").HasDefaultValue(0);
-            builder.Property(x => x.NextAttemptAt).HasColumnName("next_attempt_at").HasColumnType("timestamp with time zone");
             builder.HasKey(x => x.Id);
             builder.HasIndex(x => x.ValueId).IsUnique().HasDatabaseName("ux_outbox_messages_value_id");
             builder.HasOne<ReceivedValue>().WithMany().HasForeignKey(x => x.ValueId)

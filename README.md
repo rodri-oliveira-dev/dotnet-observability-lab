@@ -22,7 +22,7 @@ The current baseline provides:
 - ADR governance with ADR Guard
 - architecture-as-code with LikeC4
 
-HTTP ingestion idempotency, transactional Outbox storage, RabbitMQ resource/topology and the versioned ValueReceived.v1 contract are implemented. Outbox publication, Inbox processing, consolidation, and application-level telemetry are introduced by later roadmap issues.
+HTTP ingestion idempotency, transactional Outbox storage, independent RabbitMQ Outbox publication and the versioned ValueReceived.v1 contract are implemented. Inbox processing, consolidation, and application-level telemetry are introduced by later roadmap issues.
 
 ## Architecture style
 
@@ -118,7 +118,7 @@ The Aspire Dashboard should show:
 - `redis`
 - `rabbitmq` (with a management UI endpoint)
 
-The applications receive only role-specific PostgreSQL connection strings for their owned database. Redis is referenced only by `Ingestion.Api` and `Consolidation.Worker`. RabbitMQ is referenced only by the two workers. The consolidation worker declares the broker topology during startup but does not consume messages yet. The ingestion worker does not publish messages yet.
+The applications receive only role-specific PostgreSQL connection strings for their owned database. Redis is referenced only by `Ingestion.Api` and `Consolidation.Worker`. RabbitMQ is referenced only by the two workers. Both workers idempotently declare the durable broker topology. The consolidation worker does not consume messages yet. The independent ingestion Outbox worker publishes pending messages with broker confirmations.
 
 ## Ingest a value
 
@@ -148,6 +148,48 @@ Integration tests require a running Docker-compatible engine. Contract tests do 
 dotnet test ./tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj --configuration Release
 dotnet test ./tests/Messaging.Contracts.Tests/Messaging.Contracts.Tests.csproj --configuration Release
 ~~~
+
+## Verify Outbox publication while the API is stopped
+
+Start Aspire and POST a value. Stop **only** the `ingestion-api` process
+in the Aspire Dashboard; keep PostgreSQL, `ingestion-outbox-worker` and
+RabbitMQ running. The worker drains committed Outbox records without the API.
+Inspect `consolidation.value-received.v1` in the RabbitMQ management UI:
+messages remain queued until the Inbox consumer is implemented.
+
+Connect to `ingestion_db` with the ingestion application credentials and
+inspect the pending-to-confirmed transition:
+
+```sql
+SELECT "Id", event_type, occurred_at, published_at, quarantined_at, quarantine_reason,
+       publish_attempts, next_attempt_at
+FROM outbox_messages
+ORDER BY occurred_at DESC
+LIMIT 20;
+```
+
+`published_at` is set only after the broker confirms publication. Unsupported event types,
+malformed JSON and invalid message identities are quarantined with a reason and skipped
+by subsequent polls; inspect and repair them deliberately rather than repeatedly retrying
+poison rows. A transport failure or publish timeout does **not** quarantine the row:
+its persisted `next_attempt_at` postpones another attempt, using bounded exponential
+backoff so failed messages do not repeatedly occupy the oldest pending batch.
+To test retry, stop RabbitMQ, restart the API briefly to POST another value, then
+stop the API. That Outbox row stays pending until RabbitMQ returns. A crash
+between broker confirmation and database commit can lead to a duplicate
+event with the **same** message ID; the consumer will require an Inbox.
+
+The worker's `Outbox` settings are `BatchSize` (default 10, maximum 100),
+`PollInterval` (default 2 seconds), `PublishTimeout` (default 10 seconds),
+`RetryDelay` (default 5 seconds) and `MaxRetryDelay` (default 5 minutes).
+The retry counter and next-attempt time survive worker restarts. Multiple worker instances use `FOR UPDATE SKIP LOCKED` rather
+than a Redis lock. The worker does not require a running HTTP API.
+
+Outbox integration tests require a Docker-compatible engine:
+
+```bash
+dotnet test ./tests/Ingestion.Outbox.Worker.Tests/Ingestion.Outbox.Worker.Tests.csproj --configuration Release
+```
 
 ## Repository conventions
 

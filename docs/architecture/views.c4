@@ -77,9 +77,19 @@ views {
     autoLayout LeftRight
   }
 
+  view outboxPublisherComponents of lab.ingestionOutboxWorker {
+    title "C4 Level 3 - Ingestion.Outbox.Worker"
+    description "Dedicated PostgreSQL Outbox claiming and confirmed RabbitMQ publication, independent of Ingestion.Api."
+    include lab.ingestionOutboxWorker.outboxPoller
+    include lab.ingestionOutboxWorker.rabbitPublisher
+    include lab.postgresql
+    include lab.rabbitmq
+    autoLayout LeftRight
+  }
+
   view containers of lab {
     title "C4 Level 2 - Containers"
-    description "Shows the four .NET processes, PostgreSQL/Redis resources, strict database ownership, and the implemented RabbitMQ broker/topology. Publication and consumption remain planned."
+    description "Shows the four .NET processes, PostgreSQL/Redis resources, strict database ownership, and the implemented RabbitMQ broker/topology. Outbox publication is implemented; Inbox consumption remains planned."
     include apiClient
     include developer
     include lab.ingestionApi
