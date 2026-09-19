@@ -149,7 +149,9 @@ public sealed class IngestionEndpointTests(IngestionDatabaseFixture fixture)
     [Fact]
     public async Task New_outbox_message_persists_originating_W3C_trace_context()
     {
-        using var origin = new Activity("caller").SetIdFormat(ActivityIdFormat.W3C).Start();
+        using var origin = new Activity("caller");
+        origin.SetIdFormat(ActivityIdFormat.W3C);
+        origin.Start();
         Assert.NotNull(origin);
         using var factory = fixture.CreateFactory();
         using var client = factory.CreateClient();

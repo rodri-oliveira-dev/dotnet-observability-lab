@@ -39,11 +39,13 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
     : IClassFixture<OutboxDatabaseFixture>
 {
     [Fact]
-    public async Task Publisher_encodes_W3C_producer_context_in_RabbitMQ_headers()
+    public void Publisher_encodes_W3C_producer_context_in_RabbitMQ_headers()
     {
         Assert.Null(RabbitMqOutboxMessagePublisher.BuildTraceHeaders(null));
 
-        using var producer = new Activity("producer").SetIdFormat(ActivityIdFormat.W3C).Start();
+        using var producer = new Activity("producer");
+        producer.SetIdFormat(ActivityIdFormat.W3C);
+        producer.Start();
         var headers = RabbitMqOutboxMessagePublisher.BuildTraceHeaders(producer);
         Assert.NotNull(headers);
         Assert.Equal(producer.Id, Encoding.UTF8.GetString(Assert.IsType<byte[]>(headers["traceparent"])));
@@ -62,7 +64,9 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
         };
         ActivitySource.AddActivityListener(listener);
-        var origin = new Activity("originating-http").SetIdFormat(ActivityIdFormat.W3C).Start();
+        using var origin = new Activity("originating-http");
+        origin.SetIdFormat(ActivityIdFormat.W3C);
+        origin.Start();
         Assert.NotNull(origin);
         string traceParent = origin.Id!;
         var expectedTraceId = origin.TraceId;

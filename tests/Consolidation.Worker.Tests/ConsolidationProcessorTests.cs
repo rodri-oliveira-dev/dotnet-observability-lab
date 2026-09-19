@@ -62,7 +62,9 @@ public sealed class ConsolidationProcessorTests
     [Fact]
     public void Consumer_extracts_W3C_headers_and_ignores_missing_or_invalid_carriers()
     {
-        using var producer = new Activity("producer").SetIdFormat(ActivityIdFormat.W3C).Start();
+        using var producer = new Activity("producer");
+        producer.SetIdFormat(ActivityIdFormat.W3C);
+        producer.Start();
         Assert.NotNull(producer);
         var valid = new Dictionary<string, object?>
         {
