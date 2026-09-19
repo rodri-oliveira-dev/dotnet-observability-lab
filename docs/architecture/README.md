@@ -12,6 +12,8 @@ The implementation style is:
 
 The repository deliberately avoids a full Clean Architecture project-per-layer structure. Architecture should remain proportional to the small application while making the important boundaries explicit.
 
+The two persistence projects are boundary-internal implementation libraries shared by each boundary's API and Worker. They exist to keep one authoritative `DbContext`, mappings, and migration history per logical database; they are not a general project-per-layer architecture.
+
 ## C4 levels
 
 The repository uses three C4 levels.
@@ -34,16 +36,32 @@ Answers:
 
 Current view: `containers`.
 
-The four implemented processes are:
+The four executable processes are:
 
 - `Ingestion.Api`
 - `Ingestion.Outbox.Worker`
 - `Consolidation.Api`
 - `Consolidation.Worker`
 
-PostgreSQL, Redis, and RabbitMQ are present as **future placeholders** because the roadmap already depends on those architectural boundaries. They are styled as planned and must be updated by the issue that actually introduces each resource.
+The current data topology is one Aspire-managed PostgreSQL server resource containing two separately owned logical databases:
 
-The `Contracts` project is not shown as a runtime container because it is a code/build dependency, not a separately running process.
+| Boundary | Database | Allowed processes |
+| --- | --- | --- |
+| Ingestion | `ingestion_db` | `Ingestion.Api`, `Ingestion.Outbox.Worker` |
+| Consolidation | `consolidation_db` | `Consolidation.Api`, `Consolidation.Worker` |
+
+No process receives the other boundary's database reference.
+
+Redis is also a current Aspire resource, but it is deliberately wired only to:
+
+- `Ingestion.Api` for the later HTTP idempotency fast path;
+- `Consolidation.Worker` for the later duplicate-message fast path.
+
+Redis is not persistent correctness state. PostgreSQL remains authoritative.
+
+RabbitMQ remains a **future placeholder** until its dedicated implementation issue.
+
+The `Contracts` and `*.Persistence` projects are not shown as runtime containers because they are code/build dependencies, not separately running processes.
 
 ### Level 3 — Component
 
@@ -54,6 +72,51 @@ Answers:
 Component views are intentionally deferred until the corresponding behavior exists. Later issues add component views for ingestion, Outbox publication, consolidation, and read-side querying.
 
 Do not create a component for every class. A component should represent a meaningful responsibility, boundary, port, adapter, hosted service, or processing stage.
+
+## Database ownership
+
+The local environment deliberately uses one PostgreSQL container for operational simplicity, but that does not create a shared database model.
+
+Rules:
+
+- `ingestion_db` is owned only by the ingestion boundary;
+- `consolidation_db` is owned only by the consolidation boundary;
+- no cross-database queries;
+- no shared tables;
+- each boundary owns its EF Core mappings and migrations;
+- schema changes create new migrations rather than rewriting migration history.
+
+The local single-server topology is not a production deployment decision.
+
+## EF Core migration bootstrap
+
+Restore the local EF tool:
+
+```bash
+dotnet tool restore
+```
+
+Create a migration for the ingestion boundary:
+
+```bash
+dotnet ef migrations add <MigrationName> \
+  --project src/Ingestion.Persistence \
+  --context IngestionDbContext \
+  --output-dir Migrations
+```
+
+Create a migration for the consolidation boundary:
+
+```bash
+dotnet ef migrations add <MigrationName> \
+  --project src/Consolidation.Persistence \
+  --context ConsolidationDbContext \
+  --output-dir Migrations
+```
+
+The design-time factories use a local, passwordless placeholder connection string because migration generation does not require a live database. Set `INGESTION_DB_CONNECTION_STRING` or `CONSOLIDATION_DB_CONNECTION_STRING` when a design-time operation actually needs to connect to a database.
+
+Runtime applications do not use those environment variables; Aspire injects the owned database references.
 
 ## Aspire and OpenTelemetry
 

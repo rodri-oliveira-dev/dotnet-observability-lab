@@ -40,37 +40,37 @@ model {
     ingestionApi = container "Ingestion.Api" {
       #api
       technology ".NET 10 / ASP.NET Core Minimal API"
-      description "Write-side HTTP boundary. The bootstrap currently exposes only minimal endpoints; idempotent value ingestion is introduced later."
+      description "Write-side HTTP boundary. Owns ingestion_db access and receives Redis only for the later HTTP idempotency fast path."
     }
 
     ingestionOutboxWorker = container "Ingestion.Outbox.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Dedicated write-side background process. Outbox publication behavior is introduced in a later issue."
+      description "Dedicated write-side background process. Owns ingestion_db access; Outbox publication behavior is introduced later."
     }
 
     consolidationApi = container "Consolidation.Api" {
       #api
       technology ".NET 10 / ASP.NET Core Minimal API"
-      description "Read-side HTTP boundary. The consolidated read model is introduced later and remains independent from Ingestion.Api."
+      description "Read-side HTTP boundary. Reads only consolidation_db and has no Redis or ingestion runtime dependency."
     }
 
     consolidationWorker = container "Consolidation.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Dedicated read-side background process. Message consumption, Inbox, and consolidation behavior are introduced later."
+      description "Dedicated read-side background process. Owns consolidation_db access and receives Redis only for the later duplicate-message fast path."
     }
 
     postgresql = container "PostgreSQL" {
-      #database #future
+      #database
       technology "PostgreSQL"
-      description "Planned persistence resource. A later issue introduces separately owned ingestion_db and consolidation_db logical databases."
+      description "One local PostgreSQL server resource hosting two separately owned logical databases: ingestion_db and consolidation_db."
     }
 
     redis = container "Redis" {
-      #cache #future
+      #cache
       technology "Redis"
-      description "Planned optimization for idempotency and duplicate fast paths. It will not be the authoritative correctness store."
+      description "Disposable optimization resource for idempotency/deduplication fast paths. PostgreSQL remains authoritative."
     }
 
     rabbitmq = container "RabbitMQ" {
@@ -99,16 +99,20 @@ model {
   aspire.appHostDashboard -> lab.ingestionOutboxWorker "Orchestrates local process"
   aspire.appHostDashboard -> lab.consolidationApi "Orchestrates local process"
   aspire.appHostDashboard -> lab.consolidationWorker "Orchestrates local process"
+  aspire.appHostDashboard -> lab.postgresql "Orchestrates local resource"
+  aspire.appHostDashboard -> lab.redis "Orchestrates local resource"
 
   apiClient -> lab.ingestionApi "Submits values in the target write flow"
   apiClient -> lab.consolidationApi "Reads the consolidated result in the target read flow"
 
-  lab.ingestionApi -> lab.postgresql "Will persist values, idempotency state, and Outbox"
-  lab.ingestionApi -> lab.redis "Will use as idempotency fast path"
-  lab.ingestionOutboxWorker -> lab.postgresql "Will poll the Outbox"
+  lab.ingestionApi -> lab.postgresql "Uses ingestion_db only"
+  lab.ingestionOutboxWorker -> lab.postgresql "Uses ingestion_db only"
+  lab.consolidationApi -> lab.postgresql "Uses consolidation_db only"
+  lab.consolidationWorker -> lab.postgresql "Uses consolidation_db only"
+
+  lab.ingestionApi -> lab.redis "Receives Redis for HTTP idempotency fast path"
+  lab.consolidationWorker -> lab.redis "Receives Redis for message deduplication fast path"
+
   lab.ingestionOutboxWorker -> lab.rabbitmq "Will publish integration events"
   lab.rabbitmq -> lab.consolidationWorker "Will deliver integration events"
-  lab.consolidationWorker -> lab.postgresql "Will persist Inbox and consolidated read model"
-  lab.consolidationWorker -> lab.redis "Will use as duplicate fast path"
-  lab.consolidationApi -> lab.postgresql "Will read the consolidated read model"
 }

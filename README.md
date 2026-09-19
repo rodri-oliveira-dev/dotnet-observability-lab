@@ -12,13 +12,15 @@ The current baseline provides:
 - `Ingestion.Outbox.Worker`
 - `Consolidation.Api`
 - `Consolidation.Worker`
+- one Aspire-managed PostgreSQL server with `ingestion_db` and `consolidation_db`
+- Redis as an auxiliary optimization resource
 - `DotNetObservabilityLab.AppHost`
 - `DotNetObservabilityLab.ServiceDefaults`
 - `Contracts`
 - ADR governance with ADR Guard
 - architecture-as-code with LikeC4
 
-PostgreSQL, Redis, RabbitMQ, Outbox/Inbox processing, and application-level telemetry are introduced by later roadmap issues.
+RabbitMQ, HTTP idempotency behavior, Outbox/Inbox processing, and application-level telemetry are introduced by later roadmap issues.
 
 ## Architecture style
 
@@ -31,6 +33,9 @@ Core boundary rules:
 - the two APIs never call each other;
 - `Consolidation.*` must not depend on `Ingestion.*`;
 - `Ingestion.*` must not depend on `Consolidation.*`;
+- `Ingestion.*` can access only `ingestion_db`;
+- `Consolidation.*` can access only `consolidation_db`;
+- Redis is an optimization, never the durable source of truth;
 - ServiceDefaults contains only cross-cutting Aspire defaults;
 - integration contracts belong in `Contracts`, not in either service's domain model.
 
@@ -41,7 +46,7 @@ Architecture documentation lives under [docs](docs/README.md). The LikeC4 model 
 - .NET 10 SDK (the repository pins `10.0.400` and rolls forward to the latest feature band)
 - Aspire CLI compatible with Aspire 13.5
 - Node.js 20+ for LikeC4 architecture tooling
-- an OCI-compatible container runtime will be required once infrastructure resources are added in later issues
+- an OCI-compatible container runtime for PostgreSQL and Redis
 
 ## Restore and build
 
@@ -67,7 +72,7 @@ Regenerate the deterministic ADR index after ADR changes:
 dotnet tool run adr-guard index docs/adr
 ```
 
-See [docs/architecture/README.md](docs/architecture/README.md) for the C4 levels, model conventions, and maintenance rules.
+See [docs/architecture/README.md](docs/architecture/README.md) for database ownership, C4 levels, migration commands, model conventions, and maintenance rules.
 
 ## Run
 
@@ -77,14 +82,18 @@ Start the AppHost:
 aspire run --project ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj
 ```
 
-The Aspire Dashboard should show four application resources:
+The Aspire Dashboard should show:
 
 - `ingestion-api`
 - `ingestion-outbox-worker`
 - `consolidation-api`
 - `consolidation-worker`
+- `postgres`
+- `ingestion-db`
+- `consolidation-db`
+- `redis`
 
-Both APIs expose a minimal root endpoint and the Aspire development health endpoints.
+The APIs and workers receive only their owned PostgreSQL database reference. Redis is referenced only by `Ingestion.Api` and `Consolidation.Worker`.
 
 ## Repository conventions
 

@@ -67,7 +67,7 @@ views {
 
   view containers of lab {
     title "C4 Level 2 - Containers"
-    description "Shows the four executable .NET processes and the planned PostgreSQL, Redis, and RabbitMQ resources. Future infrastructure is intentionally styled as planned until its implementation issues are completed."
+    description "Shows the four .NET processes, the implemented PostgreSQL/Redis resources, strict database ownership, and RabbitMQ as the remaining future messaging resource."
     include apiClient
     include developer
     include lab.ingestionApi
