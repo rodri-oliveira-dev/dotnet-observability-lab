@@ -62,7 +62,7 @@ internal sealed partial class ConsolidationConsumer(IConnection connection, ISer
     private static partial void Accepted(ILogger logger, Guid messageId);
     [LoggerMessage(Level = LogLevel.Information, Message = "Duplicate message {MessageId} ignored.")]
     private static partial void Duplicate(ILogger logger, Guid messageId);
-    [LoggerMessage(Level = LogLevel.Error, Message = "Malformed message dead-lettered.")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Malformed message rejected without requeue.")]
     private static partial void InvalidMessage(ILogger logger, Exception exception);
     [LoggerMessage(Level = LogLevel.Error, Message = "Consolidation failed; delivery requeued.")]
     private static partial void ProcessingFailure(ILogger logger, Exception exception);
