@@ -11,12 +11,10 @@ var ingestionDatabasePassword = builder.AddParameter("ingestion-db-password", se
 var consolidationDatabasePassword = builder.AddParameter("consolidation-db-password", secret: true)
     .WithDescription("Password for the consolidation boundary PostgreSQL role.");
 
-var postgresInitDirectory = Path.Combine(builder.AppHostDirectory, "postgres-init");
-
 var postgres = builder.AddPostgres("postgres", password: postgresPassword)
     .WithEnvironment("INGESTION_DB_PASSWORD", ingestionDatabasePassword)
     .WithEnvironment("CONSOLIDATION_DB_PASSWORD", consolidationDatabasePassword)
-    .WithBindMount(postgresInitDirectory, "/docker-entrypoint-initdb.d", isReadOnly: true)
+    .WithInitFiles("postgres-init")
     .WithDataVolume();
 
 var ingestionDatabase = postgres
