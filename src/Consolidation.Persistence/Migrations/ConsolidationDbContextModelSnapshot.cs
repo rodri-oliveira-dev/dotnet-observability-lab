@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
-namespace Consolidation.Persistence;
-public sealed class ConsolidationDbContext(DbContextOptions<ConsolidationDbContext> options) : DbContext(options)
+using Microsoft.EntityFrameworkCore.Infrastructure;
+namespace Consolidation.Persistence.Migrations;
+[DbContext(typeof(ConsolidationDbContext))]
+public sealed class ConsolidationDbContextModelSnapshot : ModelSnapshot
 {
-    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
-    public DbSet<ConsolidatedTotal> ConsolidatedTotals => Set<ConsolidatedTotal>();
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void BuildModel(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
         modelBuilder.Entity<InboxMessage>(e =>
         {
             e.ToTable("inbox_messages");
@@ -23,6 +24,5 @@ public sealed class ConsolidationDbContext(DbContextOptions<ConsolidationDbConte
             e.Property(x => x.LastUpdatedAt).HasColumnName("last_updated_at");
             e.Ignore(x => x.Average);
         });
-        base.OnModelCreating(modelBuilder);
     }
 }
