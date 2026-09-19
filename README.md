@@ -292,6 +292,71 @@ Events created before the optional trace columns were introduced and external
 messages with invalid/missing headers still publish/consume successfully, but
 cannot be attached to an earlier trace.
 
+## Application observability: spans, metrics and correlated logs
+
+Custom instrumentation adds decision-level signals to the existing OpenTelemetry
+pipeline; no new collector, transport, runtime container or business dependency
+is introduced. ServiceDefaults explicitly subscribes to the `Ingestion.Api`,
+`Ingestion.Outbox.Worker` and `Consolidation.Worker` meters, in addition to
+automatic HTTP/runtime instruments. Open the Aspire Dashboard's **Traces**,
+**Structured Logs** and **Metrics** views for the corresponding local resources.
+
+| Metric (unit) | Meaning |
+| --- | --- |
+| `lab.ingestion.values.accepted` (`{value}`) | First-time values committed atomically with an Outbox event; replay/conflict does not increment it. |
+| `lab.ingestion.requests.duplicate` (`{request}`) | Existing-key requests, tagged only `result=replayed\|conflict`. |
+| `lab.outbox.messages.pending` (`{message}`) | PostgreSQL snapshot of all unquarantined, unpublished Outbox rows, including scheduled retries. Emitted after each successful polling transaction; last reported value becomes stale if the worker/database is down. In multi-instance deployments each worker publishes its own database-wide snapshot; do **not** sum them. |
+| `lab.outbox.messages.published` (`{message}`) | Confirmed RabbitMQ publications marked published by a committed Outbox transaction. |
+| `lab.outbox.messages.publish_failures` (`{attempt}`) | Failed publication attempts that enter the retry path, not permanent quarantines or the distinct-message count. |
+| `lab.consolidation.messages.consumed` (`{message}`) | RabbitMQ deliveries received, including duplicates, invalid events and redeliveries; not unique business events. |
+| `lab.consolidation.messages.duplicate` (`{message}`) | Inbox identities already committed, ignored after the duplicate check. |
+| `lab.consolidation.values.processed` (`{value}`) | New events whose Inbox insert and consolidated total committed together; duplicates do not increment it. |
+| `lab.consolidation.processing.duration` (`s`) | Inbox/consolidation transaction duration, tagged only `result=applied\|duplicate\|failed`. |
+
+Metric dimensions are deliberately bounded: no MessageId, ValueId, Idempotency-Key,
+TraceId, payload or dynamic error message appears as a label. Identifiers are
+permitted only as trace/span attributes and structured log properties. The
+`ingestion.accept_value` and `consolidation.process_value` spans expose the
+durable decision/result, nested under the existing HTTP and RabbitMQ consumer
+traces. Broker publishing remains on the existing producer span. When an active
+trace exists, OpenTelemetry correlates structured log records to the current
+trace/span. Routine success logs stay limited to meaningful commit transitions.
+
+### Exercise operational scenarios in the Dashboard
+
+1. **Normal value:** POST `/values` with a fresh `Idempotency-Key`. Follow
+   `ingestion.accept_value` → the existing RabbitMQ producer → consumer →
+   `consolidation.process_value`. Compare the value/message IDs on spans and
+   commit logs; inspect accepted, published, consumed and processed counters.
+2. **Duplicate HTTP request:** Repeat the *same key and value*, then reuse
+   that key with a *different* value. Expect HTTP 200 and 409 respectively,
+   `idempotency.status=replayed` and `conflict`, duplicate-request counter
+   increments with only those two bounded result tags, and **no new** accepted
+   value or Outbox event. Inspect structured `IdempotencyDuplicate` records.
+3. **Duplicate broker event:** Publish the same valid `ValueReceivedV1`
+   payload **with the original AMQP MessageId** to the existing
+   `lab.events.v1` exchange using routing key `value.received.v1`.
+   Use RabbitMQ's management publish interface or an AMQP client and the original
+   Outbox row's payload and event ID; changing MessageId would make a different
+   logical event. Expect consumed/duplicate counters to increase, with no
+   additional successful consolidation or aggregate increment. Inspect the
+   `consolidation.process_value` span (`consolidation.result=duplicate`)
+   and the correlated `Duplicate` log. Do not republish a production event.
+4. **Outbox failure/backlog:** With the Outbox worker already running, stop
+   RabbitMQ temporarily or make the broker unavailable; POST a fresh value.
+   On a failed publish attempt, inspect `OutboxPublishFailed`, the failure
+   counter, pending gauge and next retry timestamp. Restore RabbitMQ and allow
+   the retry to succeed; the published counter increments and the pending
+   snapshot falls once the message is durably marked. An Outbox transaction
+   rollback does **not** count a durable publication; the broker can still
+   redeliver a confirmed message and the Inbox remains idempotent.
+
+Run the focused PostgreSQL-backed integration suites with
+`dotnet test tests/Ingestion.Api.Tests`,
+`dotnet test tests/Ingestion.Outbox.Worker.Tests` and
+`dotnet test tests/Consolidation.Worker.Tests` (Docker required). Their
+MeterListener tests verify the *repository-owned decisions*, not the OTel SDK.
+
 ## Repository conventions
 
 The engineering baseline is adapted from `rodri-oliveira-dev/poc-arquitetura`:

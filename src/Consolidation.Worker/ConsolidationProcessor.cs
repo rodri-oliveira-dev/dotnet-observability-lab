@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Consolidation.Persistence;
 using Contracts;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,15 @@ public sealed class ConsolidationProcessor(ConsolidationDbContext db, TimeProvid
         ArgumentNullException.ThrowIfNull(message);
         if (message.EventId == Guid.Empty || message.ValueId == Guid.Empty)
             throw new ArgumentException("EventId and ValueId must not be empty.", nameof(message));
+
+        using var activity = ConsolidationTelemetry.Traces.StartActivity(
+            "consolidation.process_value", ActivityKind.Internal);
+        activity?.SetTag("message.id", message.MessageId.ToString("D"));
+        activity?.SetTag("value.id", message.ValueId.ToString("D"));
+        long started = Stopwatch.GetTimestamp();
+        string result = "failed";
+        try
+        {
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var now = clock.GetUtcNow();
         // ON CONFLICT waits for concurrent transactions to settle; only the winner increments.
@@ -23,6 +33,9 @@ public sealed class ConsolidationProcessor(ConsolidationDbContext db, TimeProvid
         if (inserted == 0)
         {
             await transaction.CommitAsync(cancellationToken);
+            result = "duplicate";
+            activity?.SetTag("consolidation.result", result);
+            ConsolidationTelemetry.DuplicateMessages.Add(1);
             return ConsolidationResult.Duplicate;
         }
         // Singleton UPSERT serializes increments from different messages without lost updates.
@@ -36,6 +49,21 @@ public sealed class ConsolidationProcessor(ConsolidationDbContext db, TimeProvid
                 last_updated_at = GREATEST(consolidated_totals.last_updated_at, EXCLUDED.last_updated_at)
             """, [message.Value, now], cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        result = "applied";
+        activity?.SetTag("consolidation.result", result);
+        ConsolidationTelemetry.SuccessfulConsolidations.Add(1);
         return ConsolidationResult.Applied;
+        }
+        catch
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "Inbox/consolidation persistence failed");
+            throw;
+        }
+        finally
+        {
+            ConsolidationTelemetry.ProcessingDuration.Record(
+                Stopwatch.GetElapsedTime(started).TotalSeconds,
+                new KeyValuePair<string, object?>("result", result));
+        }
     }
 }

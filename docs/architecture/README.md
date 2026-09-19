@@ -185,6 +185,15 @@ which the consolidation worker extracts into a consumer span around the Inbox
 transaction. The later read request starts a **separate HTTP trace**.
 Missing or invalid context does not block business processing.
 
+Custom application spans for first-time ingestion and Inbox consolidation and
+a bounded set of service-local System.Diagnostics.Metrics instruments add
+operational decision visibility to those existing process boundaries. They do
+not introduce a separately deployed observability component or alter
+business-message relationships in LikeC4. The meter names are explicitly
+registered in ServiceDefaults, and metric dimensions exclude all per-request
+identifiers. See the README's application observability runbook for the exact
+metric contracts and duplicate/retry demonstrations.
+
 The C4 Container view shows four explicit **OTLP telemetry export** edges
 from the processes to the Aspire Dashboard; those edges are not API calls or
 broker/business-event delivery. Point the standard OTLP exporter to another

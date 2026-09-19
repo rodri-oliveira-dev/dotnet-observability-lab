@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Diagnostics;
 using System.Text;
 using Consolidation.Persistence;
@@ -9,6 +12,61 @@ using Xunit;
 namespace Consolidation.Worker.Tests;
 public sealed class ConsolidationProcessorTests
 {
+    [Fact]
+    public async Task Inbox_commit_and_duplicate_emit_distinct_low_cardinality_signals()
+    {
+        var measurements = new ConcurrentQueue<(string Name, double Value, string? Result, int TagCount)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == "Consolidation.Worker")
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, count, tags, _) =>
+        {
+            var dimensions = tags.ToArray();
+            measurements.Enqueue((instrument.Name, count,
+                dimensions.FirstOrDefault(x => x.Key == "result").Value as string, dimensions.Length));
+        });
+        listener.SetMeasurementEventCallback<double>((instrument, seconds, tags, _) =>
+        {
+            var dimensions = tags.ToArray();
+            measurements.Enqueue((instrument.Name, seconds,
+                dimensions.FirstOrDefault(x => x.Key == "result").Value as string, dimensions.Length));
+        });
+        listener.Start();
+
+        var activities = new ConcurrentQueue<(string? Name, string? Result)>();
+        using var traces = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "Consolidation.Worker",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity => activities.Enqueue(
+                (activity.DisplayName, activity.GetTagItem("consolidation.result") as string))
+        };
+        ActivitySource.AddActivityListener(traces);
+
+        await using var postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
+        await postgres.StartAsync();
+        var options = new DbContextOptionsBuilder<ConsolidationDbContext>()
+            .UseNpgsql(postgres.GetConnectionString()).Options;
+        await using (var setup = new ConsolidationDbContext(options))
+            await setup.Database.MigrateAsync();
+
+        var message = new ValueReceivedV1(Guid.NewGuid(), Guid.NewGuid(), 9m, DateTimeOffset.UtcNow);
+        await using var db = new ConsolidationDbContext(options);
+        var processor = new ConsolidationProcessor(db, TimeProvider.System);
+        Assert.Equal(ConsolidationResult.Applied, await processor.ProcessAsync(message, CancellationToken.None));
+        Assert.Equal(ConsolidationResult.Duplicate, await processor.ProcessAsync(message, CancellationToken.None));
+        Assert.Contains(measurements, x => x is { Name: "lab.consolidation.values.processed", Value: 1, TagCount: 0 });
+        Assert.Contains(measurements, x => x is { Name: "lab.consolidation.messages.duplicate", Value: 1, TagCount: 0 });
+        Assert.Contains(measurements, x => x is { Name: "lab.consolidation.processing.duration", Result: "applied", TagCount: 1 });
+        Assert.Contains(measurements, x => x is { Name: "lab.consolidation.processing.duration", Result: "duplicate", TagCount: 1 });
+        Assert.Contains(activities, x => x is { Name: "consolidation.process_value", Result: "applied" });
+        Assert.Contains(activities, x => x is { Name: "consolidation.process_value", Result: "duplicate" });
+        Assert.All(measurements, x => Assert.True(x.TagCount <= 1));
+    }
+
     [Fact]
     public async Task First_duplicate_concurrent_distinct_and_cacheless_deliveries_are_correct()
     {
