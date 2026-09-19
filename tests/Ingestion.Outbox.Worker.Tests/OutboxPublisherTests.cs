@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Contracts;
@@ -36,6 +38,48 @@ public sealed class OutboxDatabaseFixture : IAsyncLifetime
 public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
     : IClassFixture<OutboxDatabaseFixture>
 {
+    [Fact]
+    public async Task Publisher_encodes_W3C_producer_context_in_RabbitMQ_headers()
+    {
+        Assert.Null(RabbitMqOutboxMessagePublisher.BuildTraceHeaders(null));
+
+        using var producer = new Activity("producer").SetIdFormat(ActivityIdFormat.W3C).Start();
+        var headers = RabbitMqOutboxMessagePublisher.BuildTraceHeaders(producer);
+        Assert.NotNull(headers);
+        Assert.Equal(producer.Id, Encoding.UTF8.GetString(Assert.IsType<byte[]>(headers["traceparent"])));
+        Assert.True(ActivityContext.TryParse(
+            Encoding.UTF8.GetString(Assert.IsType<byte[]>(headers["traceparent"])), null, out var extracted));
+        Assert.Equal(producer.TraceId, extracted.TraceId);
+        Assert.Equal(producer.SpanId, extracted.SpanId);
+    }
+
+    [Fact]
+    public async Task Publisher_uses_persisted_request_parent_not_the_worker_polling_context()
+    {
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "Ingestion.Outbox.Worker",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
+        };
+        ActivitySource.AddActivityListener(listener);
+        var origin = new Activity("originating-http").SetIdFormat(ActivityIdFormat.W3C).Start();
+        Assert.NotNull(origin);
+        string traceParent = origin.Id!;
+        var expectedTraceId = origin.TraceId;
+        var expectedParentSpanId = origin.SpanId;
+        origin.Stop();
+
+        Guid messageId = await SeedAsync(traceParent: traceParent);
+        var publisher = new RecordingPublisher();
+        await using var database = fixture.CreateContext();
+        Assert.Equal(1, await CreateProcessor(database, publisher).ProcessBatchAsync(CancellationToken.None));
+        Assert.Equal([messageId], publisher.Ids);
+        Assert.NotNull(publisher.ObservedActivity);
+        Assert.Equal(ActivityKind.Producer, publisher.ObservedActivity.Kind);
+        Assert.Equal(expectedTraceId, publisher.ObservedActivity.TraceId);
+        Assert.Equal(expectedParentSpanId, publisher.ObservedActivity.ParentSpanId);
+    }
+
     [Fact]
     public async Task Pending_message_is_published_then_marked_only_after_confirmation()
     {
@@ -269,7 +313,7 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
     }
 
     private async Task<Guid> SeedAsync(bool published = false, string eventType = nameof(ValueReceivedV1),
-        string? payload = null, DateTimeOffset? occurredAt = null)
+        string? payload = null, DateTimeOffset? occurredAt = null, string? traceParent = null)
     {
         await using var database = fixture.CreateContext();
         var now = new DateTimeOffset(2026, 9, 19, 12, 0, 0, TimeSpan.Zero);
@@ -290,7 +334,8 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
             EventType = eventType,
             Payload = payload ?? JsonSerializer.Serialize(message),
             OccurredAt = occurredAt ?? now,
-            PublishedAt = published ? now : null
+            PublishedAt = published ? now : null,
+            TraceParent = traceParent
         });
         await database.SaveChangesAsync();
         return message.EventId;
@@ -309,6 +354,7 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
         public bool Fail { get; set; }
         public TimeSpan Delay { get; set; }
         public Guid[] Ids => _ids.ToArray();
+        public Activity? ObservedActivity { get; private set; }
 
         public async Task PublishAsync(ValueReceivedV1 message, string json, CancellationToken cancellationToken)
         {
@@ -323,6 +369,7 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
                 throw new InvalidOperationException("Simulated broker failure.");
             }
 
+            ObservedActivity = Activity.Current;
             _ids.Enqueue(message.EventId);
         }
     }
