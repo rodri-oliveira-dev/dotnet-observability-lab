@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.PostgreSql;
@@ -25,28 +24,32 @@ public sealed class IngestionDatabaseFixture : IAsyncLifetime
         .WithPassword(Guid.NewGuid().ToString("N"))
         .Build();
 
-    public Task InitializeAsync() => _postgres.StartAsync();
+    public async Task InitializeAsync()
+    {
+        await _postgres.StartAsync();
+        // Aspire resolves this setting while Program registers its pooled DbContext.
+        // WebApplicationFactory's later ConfigureAppConfiguration hook is too late.
+        Environment.SetEnvironmentVariable("ConnectionStrings__ingestion-db", _postgres.GetConnectionString());
+    }
 
-    public async Task DisposeAsync() => await _postgres.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        Environment.SetEnvironmentVariable("ConnectionStrings__ingestion-db", null);
+        await _postgres.DisposeAsync();
+    }
 
     public IngestionDbContext CreateContext() =>
         new(new DbContextOptionsBuilder<IngestionDbContext>()
             .UseNpgsql(_postgres.GetConnectionString()).Options);
 
     public WebApplicationFactory<Program> CreateFactory(bool cacheUnavailable = false, TimeProvider? clock = null) =>
-        new IngestionWebApplicationFactory(_postgres.GetConnectionString(), cacheUnavailable, clock);
+        new IngestionWebApplicationFactory(cacheUnavailable, clock);
 
     private sealed class IngestionWebApplicationFactory(
-        string connectionString, bool cacheUnavailable, TimeProvider? clock) : WebApplicationFactory<Program>
+        bool cacheUnavailable, TimeProvider? clock) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.ConfigureAppConfiguration((_, configuration) =>
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:ingestion-db"] = connectionString
-                }));
-
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IDistributedCache>();
@@ -233,7 +236,7 @@ public sealed class IngestionEndpointTests(IngestionDatabaseFixture fixture)
         await using var database = fixture.CreateContext();
         int outboxCountBefore = await database.OutboxMessages.CountAsync();
         await database.Database.ExecuteSqlRawAsync(
-            "ALTER TABLE outbox_messages ADD CONSTRAINT reject_outbox_atomicity_test CHECK (event_type <> 'ValueReceivedV1')");
+            "ALTER TABLE outbox_messages ADD CONSTRAINT reject_outbox_atomicity_test CHECK (event_type <> 'ValueReceivedV1') NOT VALID");
         try
         {
             using var response = await PostAsync(client, key, 3m);
