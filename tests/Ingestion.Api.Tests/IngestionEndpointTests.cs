@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -50,6 +51,13 @@ public sealed class IngestionDatabaseFixture : IAsyncLifetime
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            // Surface server-side exceptions in CI rather than a generic 500 response alone.
+            builder.ConfigureLogging(logging =>
+            {
+                logging.AddConsole();
+                logging.SetMinimumLevel(LogLevel.Error);
+            });
+
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IDistributedCache>();
