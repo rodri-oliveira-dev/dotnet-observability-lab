@@ -22,7 +22,7 @@ The current baseline provides:
 - ADR governance with ADR Guard
 - architecture-as-code with LikeC4
 
-HTTP ingestion idempotency, transactional Outbox storage, independent RabbitMQ Outbox publication and the versioned ValueReceived.v1 contract are implemented. Inbox processing, consolidation, and application-level telemetry are introduced by later roadmap issues.
+HTTP ingestion idempotency, transactional Outbox storage, independent RabbitMQ Outbox publication, ValueReceived.v1 and PostgreSQL-backed Inbox consolidation are implemented. The read HTTP endpoint and application-level telemetry are introduced by later roadmap issues.
 
 ## Architecture style
 
@@ -118,7 +118,7 @@ The Aspire Dashboard should show:
 - `redis`
 - `rabbitmq` (with a management UI endpoint)
 
-The applications receive only role-specific PostgreSQL connection strings for their owned database. Redis is referenced only by `Ingestion.Api` and `Consolidation.Worker`. RabbitMQ is referenced only by the two workers. Both workers idempotently declare the durable broker topology. The consolidation worker does not consume messages yet. The independent ingestion Outbox worker publishes pending messages with broker confirmations.
+The applications receive only role-specific PostgreSQL connection strings for their owned database. Redis is referenced only by `Ingestion.Api` and `Consolidation.Worker`. RabbitMQ is referenced only by the two workers. Both workers idempotently declare the durable broker topology. The consolidation worker consumes messages and commits its Inbox and consolidated total before manually acknowledging each delivery. The independent ingestion Outbox worker publishes pending messages with broker confirmations.
 
 ## Ingest a value
 
@@ -154,8 +154,11 @@ dotnet test ./tests/Messaging.Contracts.Tests/Messaging.Contracts.Tests.csproj -
 Start Aspire and POST a value. Stop **only** the `ingestion-api` process
 in the Aspire Dashboard; keep PostgreSQL, `ingestion-outbox-worker` and
 RabbitMQ running. The worker drains committed Outbox records without the API.
-Inspect `consolidation.value-received.v1` in the RabbitMQ management UI:
-messages remain queued until the Inbox consumer is implemented.
+Inspect `consolidation.value-received.v1` in the RabbitMQ management UI. While
+`consolidation-worker` is running, messages are normally consumed and acknowledged
+after the Inbox/aggregate transaction commits: an empty queue is expected.
+To inspect queued messages, stop **only** `consolidation-worker` before POSTing
+a new value, then restart it and verify durable processing.
 
 Connect to `ingestion_db` with the ingestion application credentials and
 inspect the pending-to-confirmed transition:
@@ -177,7 +180,7 @@ backoff so failed messages do not repeatedly occupy the oldest pending batch.
 To test retry, stop RabbitMQ, restart the API briefly to POST another value, then
 stop the API. That Outbox row stays pending until RabbitMQ returns. A crash
 between broker confirmation and database commit can lead to a duplicate
-event with the **same** message ID; the consumer will require an Inbox.
+event with the **same** message ID; the consumer's durable Inbox prevents a second aggregate update.
 
 The worker's `Outbox` settings are `BatchSize` (default 10, maximum 100),
 `PollInterval` (default 2 seconds), `PublishTimeout` (default 10 seconds),
@@ -190,6 +193,38 @@ Outbox integration tests require a Docker-compatible engine:
 ```bash
 dotnet test ./tests/Ingestion.Outbox.Worker.Tests/Ingestion.Outbox.Worker.Tests.csproj --configuration Release
 ```
+
+## Verify Inbox consumption and consolidation
+
+Keep `consolidation-worker`, RabbitMQ and PostgreSQL running. POST two values
+with distinct Idempotency-Key headers through `ingestion-api`; after the Outbox
+worker publishes them, the consolidation consumer acknowledges both and the
+RabbitMQ queue should return to zero ready messages.
+
+Connect to `consolidation_db` as `consolidation_app` (not the ingestion role)
+and verify the persisted read model and Inbox:
+
+```sql
+SELECT id, count, sum, sum / NULLIF(count, 0) AS average, last_updated_at
+FROM consolidated_totals WHERE id = 1;
+
+SELECT message_id, processed_at FROM inbox_messages ORDER BY processed_at DESC LIMIT 20;
+```
+
+The read API does not expose the aggregate over HTTP yet. Re-publishing an event
+with the **same AMQP MessageId and payload EventId** should leave `count`,
+`sum`, `last_updated_at` and the Inbox row count unchanged. The PostgreSQL
+Inbox primary key protects duplicates even after Redis data loss; Redis is not
+consulted by the consumer. Malformed events are rejected without requeue (there
+is no dead-letter queue configured yet), and transient database errors are
+requeued. To observe queued messages instead, stop the consolidation worker
+before publishing and restart it after inspection.
+
+```bash
+dotnet test ./tests/Consolidation.Worker.Tests/Consolidation.Worker.Tests.csproj --configuration Release
+```
+
+The consolidation integration tests require a Docker-compatible engine.
 
 ## Repository conventions
 

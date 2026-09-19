@@ -55,7 +55,7 @@ The PostgreSQL administrator credential is used only by the local PostgreSQL res
 Redis is also a current Aspire resource, but it is deliberately wired only to:
 
 - `Ingestion.Api` for the implemented HTTP idempotency fast path;
-- `Consolidation.Worker` for the later duplicate-message fast path.
+- `Consolidation.Worker` as a provisioned Aspire reference for a possible future duplicate-message fast path; the consumer does not use Redis.
 
 Redis is not persistent correctness state. PostgreSQL remains authoritative.
 
@@ -65,12 +65,12 @@ worker-owned durable direct exchange (`lab.events.v1`) bound to a durable queue
 Only `Ingestion.Outbox.Worker` and `Consolidation.Worker` receive the RabbitMQ
 reference; the consolidation worker declares the topology when it starts.
 Both APIs remain independent of the broker. The Outbox worker independently
-publishes durable messages with broker confirmations; Inbox consumption and
-acknowledgements follow in subsequent issues. Either worker may idempotently
+publishes durable messages with broker confirmations; the consolidation worker
+atomically commits the Inbox and read model before acknowledging deliveries. Either worker may idempotently
 declare the durable topology even when the other is offline.
 
-The transport contract is **at-least-once**: a future consumer must persist the
-Inbox identity with the read-model update and tolerate redelivery. See
+The transport contract is **at-least-once**: the consumer persists the
+Inbox identity with the read-model update and tolerates redelivery. See
 [ValueReceived.v1](../events/ValueReceived.v1.md) for contract fields and
 transport metadata.
 
@@ -82,7 +82,7 @@ Answers:
 
 > How is one application boundary organized internally around its meaningful responsibilities?
 
-The ingestionComponents view now shows the implemented HTTP endpoint, idempotent ingestion use case, and transactional EF Core persistence boundary. The outboxPublisherComponents view models the dedicated poller, the confirmed RabbitMQ adapter and their infrastructure boundaries. Later issues add consolidation and read-side querying.
+The ingestionComponents view now shows the implemented HTTP endpoint, idempotent ingestion use case, and transactional EF Core persistence boundary. The outboxPublisherComponents view models the dedicated poller, the confirmed RabbitMQ adapter and their infrastructure boundaries. The consolidationComponents view models the active RabbitMQ consumer, transactional Inbox processor and PostgreSQL store. A later issue adds read-side HTTP querying.
 
 Do not create a component for every class. A component should represent a meaningful responsibility, boundary, port, adapter, hosted service, or processing stage.
 

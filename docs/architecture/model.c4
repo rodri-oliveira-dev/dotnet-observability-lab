@@ -94,7 +94,7 @@ model {
     redis = container "Redis" {
       #cache
       technology "Redis"
-      description "Disposable optimization resource for idempotency/deduplication fast paths. PostgreSQL remains authoritative."
+      description "Disposable optimization resource for HTTP idempotency. Consolidation has an Aspire reference but no Redis lookup; PostgreSQL remains authoritative."
     }
 
     rabbitmq = container "RabbitMQ" {
@@ -136,7 +136,7 @@ model {
   lab.consolidationWorker -> lab.postgresql "Uses consolidation_db as consolidation_app"
 
   lab.ingestionApi -> lab.redis "Receives Redis for HTTP idempotency fast path"
-  lab.consolidationWorker -> lab.redis "Receives Redis for message deduplication fast path"
+  lab.consolidationWorker -> lab.redis "Aspire reference for optional future optimization; no active Redis lookup"
 
   lab.ingestionOutboxWorker -> lab.rabbitmq "Publishes persistent integration events with broker confirmations"
   lab.ingestionOutboxWorker.outboxPoller -> lab.postgresql "Claims pending Outbox records and commits confirmed publication"
