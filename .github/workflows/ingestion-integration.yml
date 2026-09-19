@@ -62,6 +62,8 @@ jobs:
         run: dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
       - name: PostgreSQL integration tests
         run: dotnet test ./tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj --configuration Release --no-build
+      - name: Messaging contract tests
+        run: dotnet test ./tests/Messaging.Contracts.Tests/Messaging.Contracts.Tests.csproj --configuration Release --no-build
       - name: ADR Guard
         if: always()
         run: |

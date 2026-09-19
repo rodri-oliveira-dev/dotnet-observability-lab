@@ -35,6 +35,13 @@ var consolidationConnectionString = ReferenceExpression.Create(
 
 var redis = builder.AddRedis("redis");
 
+// Stable local credentials are required for the persistent RabbitMQ volume.
+var rabbitMqUsername = builder.AddParameter("rabbitmq-username", secret: true);
+var rabbitMqPassword = builder.AddParameter("rabbitmq-password", secret: true);
+var rabbitmq = builder.AddRabbitMQ("rabbitmq", rabbitMqUsername, rabbitMqPassword)
+    .WithDataVolume()
+    .WithManagementPlugin();
+
 builder.AddProject<Projects.Ingestion_Api>("ingestion-api")
     .WithEnvironment("ConnectionStrings__ingestion-db", ingestionConnectionString)
     .WithReference(redis)
@@ -43,7 +50,9 @@ builder.AddProject<Projects.Ingestion_Api>("ingestion-api")
 
 builder.AddProject<Projects.Ingestion_Outbox_Worker>("ingestion-outbox-worker")
     .WithEnvironment("ConnectionStrings__ingestion-db", ingestionConnectionString)
-    .WaitFor(ingestionDatabase);
+    .WithReference(rabbitmq)
+    .WaitFor(ingestionDatabase)
+    .WaitFor(rabbitmq);
 
 builder.AddProject<Projects.Consolidation_Api>("consolidation-api")
     .WithEnvironment("ConnectionStrings__consolidation-db", consolidationConnectionString)
@@ -53,6 +62,8 @@ builder.AddProject<Projects.Consolidation_Api>("consolidation-api")
 builder.AddProject<Projects.Consolidation_Worker>("consolidation-worker")
     .WithEnvironment("ConnectionStrings__consolidation-db", consolidationConnectionString)
     .WithReference(redis)
-    .WaitFor(consolidationDatabase);
+    .WithReference(rabbitmq)
+    .WaitFor(consolidationDatabase)
+    .WaitFor(rabbitmq);
 
 builder.Build().Run();

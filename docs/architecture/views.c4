@@ -79,7 +79,7 @@ views {
 
   view containers of lab {
     title "C4 Level 2 - Containers"
-    description "Shows the four .NET processes, the implemented PostgreSQL/Redis resources, strict database ownership, and RabbitMQ as the remaining future messaging resource."
+    description "Shows the four .NET processes, PostgreSQL/Redis resources, strict database ownership, and the implemented RabbitMQ broker/topology. Publication and consumption remain planned."
     include apiClient
     include developer
     include lab.ingestionApi

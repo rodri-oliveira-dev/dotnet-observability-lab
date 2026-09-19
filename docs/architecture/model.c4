@@ -55,7 +55,7 @@ model {
     ingestionOutboxWorker = container "Ingestion.Outbox.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Dedicated write-side background process. Uses ingestion_db through ingestion_app; Outbox publication behavior is introduced later."
+      description "Dedicated write-side background process. Uses ingestion_db through ingestion_app and connects to RabbitMQ; Outbox publication behavior is introduced later."
     }
 
     consolidationApi = container "Consolidation.Api" {
@@ -67,7 +67,7 @@ model {
     consolidationWorker = container "Consolidation.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Dedicated read-side background process. Uses consolidation_db through consolidation_app and receives Redis only for the later duplicate-message fast path."
+      description "Dedicated read-side background process. Uses consolidation_db through consolidation_app, declares RabbitMQ topology, and receives Redis only for the later duplicate-message fast path. Actual consumption/Inbox behavior comes later."
     }
 
     postgresql = container "PostgreSQL" {
@@ -83,9 +83,9 @@ model {
     }
 
     rabbitmq = container "RabbitMQ" {
-      #broker #future
-      technology "RabbitMQ"
-      description "Planned asynchronous transport between the write and consolidation boundaries."
+      #broker
+      technology "RabbitMQ / AMQP 0-9-1"
+      description "Aspire-managed broker with management UI and persistent storage. The consolidation worker declares the durable direct lab.events.v1 exchange and durable consolidation.value-received.v1 queue bound by value.received.v1. Publisher and consumer loops follow in later issues."
     }
   }
 
@@ -110,6 +110,7 @@ model {
   aspire.appHostDashboard -> lab.consolidationWorker "Orchestrates local process"
   aspire.appHostDashboard -> lab.postgresql "Orchestrates local resource"
   aspire.appHostDashboard -> lab.redis "Orchestrates local resource"
+  aspire.appHostDashboard -> lab.rabbitmq "Orchestrates local broker and its management UI"
 
   apiClient -> lab.ingestionApi "Submits values in the target write flow"
   apiClient -> lab.consolidationApi "Reads the consolidated result in the target read flow"
@@ -122,8 +123,9 @@ model {
   lab.ingestionApi -> lab.redis "Receives Redis for HTTP idempotency fast path"
   lab.consolidationWorker -> lab.redis "Receives Redis for message deduplication fast path"
 
-  lab.ingestionOutboxWorker -> lab.rabbitmq "Will publish integration events"
-  lab.rabbitmq -> lab.consolidationWorker "Will deliver integration events"
+  lab.ingestionOutboxWorker -> lab.rabbitmq "Connected to broker; will publish Outbox events in a later issue"
+  lab.consolidationWorker -> lab.rabbitmq "Declares durable exchange, queue and routing binding"
+  lab.rabbitmq -> lab.consolidationWorker "Will deliver integration events once the Inbox consumer is implemented"
   apiClient -> lab.ingestionApi.valuesEndpoint "POST /values with Idempotency-Key"
   lab.ingestionApi.valuesEndpoint -> lab.ingestionApi.ingestionUseCase "Delegates the validated request"
   lab.ingestionApi.ingestionUseCase -> lab.ingestionApi.ingestionPersistence "Reads original receipt or commits value and Outbox"

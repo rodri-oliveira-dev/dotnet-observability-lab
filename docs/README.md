@@ -6,6 +6,7 @@ This directory is the entry point for detailed project documentation.
 
 - [Architecture overview and C4 model](architecture/README.md)
 - [Architecture Decision Records](adr/README.md)
+- [Versioned integration event: ValueReceived.v1](events/ValueReceived.v1.md)
 
 The repository intentionally separates **current architecture documentation** from **historical architectural decisions**:
 
