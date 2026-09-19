@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -142,6 +143,26 @@ public sealed class IngestionEndpointTests(IngestionDatabaseFixture fixture)
         Assert.Equal(outbox.Id, payload.EventId);
         Assert.Equal(receipt.Id, payload.ValueId);
         Assert.Equal(10.5m, payload.Value);
+    }
+
+
+    [Fact]
+    public async Task New_outbox_message_persists_originating_W3C_trace_context()
+    {
+        using var origin = new Activity("caller").SetIdFormat(ActivityIdFormat.W3C).Start();
+        Assert.NotNull(origin);
+        using var factory = fixture.CreateFactory();
+        using var client = factory.CreateClient();
+        string key = NewKey();
+        using var response = await PostAsync(client, key, 14m);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        await using var database = fixture.CreateContext();
+        var value = await database.ReceivedValues.SingleAsync(x => x.IdempotencyKey == key);
+        var row = await database.OutboxMessages.SingleAsync(x => x.ValueId == value.Id);
+        Assert.NotNull(row.TraceParent);
+        Assert.True(ActivityContext.TryParse(row.TraceParent, row.TraceState, out var persisted));
+        Assert.Equal(origin.TraceId, persisted.TraceId);
     }
 
     [Fact]

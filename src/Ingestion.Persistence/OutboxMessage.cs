@@ -7,6 +7,8 @@ public sealed class OutboxMessage
     public required string EventType { get; set; }
     public required string Payload { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
+    public string? TraceParent { get; set; }
+    public string? TraceState { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset? QuarantinedAt { get; set; }
     public string? QuarantineReason { get; set; }
