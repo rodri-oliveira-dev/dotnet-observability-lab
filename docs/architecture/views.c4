@@ -110,7 +110,7 @@ views {
 
   view containers of lab {
     title "C4 Level 2 - Containers"
-    description "Shows independent read and write API processes, PostgreSQL/Redis resources, strict database ownership, and the implemented RabbitMQ broker/topology. Outbox publication is implemented; Inbox consumption and atomic consolidation are implemented."
+    description "Shows independent APIs, PostgreSQL, Redis and RabbitMQ business relationships; separate OTLP export edges end at the local Aspire Dashboard, which does not route business traffic."
     include apiClient
     include developer
     include lab.ingestionApi

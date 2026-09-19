@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -70,7 +71,10 @@ public sealed class IngestValueHandler(
             ValueId = received.Id,
             EventType = nameof(ValueReceivedV1),
             Payload = JsonSerializer.Serialize(integrationEvent),
-            OccurredAt = now
+            OccurredAt = now,
+            // Persist the originating W3C span context with the business Outbox transaction.
+            TraceParent = Activity.Current is { IdFormat: ActivityIdFormat.W3C } span ? span.Id : null,
+            TraceState = Activity.Current is { IdFormat: ActivityIdFormat.W3C } current ? current.TraceStateString : null
         };
 
         try

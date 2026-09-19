@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Contracts;
 using Ingestion.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Messaging;
 
 namespace Ingestion.Outbox.Worker;
 
@@ -19,6 +21,8 @@ public sealed class OutboxProcessor(
     IOptions<OutboxOptions> options,
     ILogger<OutboxProcessor> logger)
 {
+    private static readonly ActivitySource Traces = new("Ingestion.Outbox.Worker");
+
     private static readonly Action<ILogger, Guid, DateTimeOffset, Exception?> PublishFailed =
         LoggerMessage.Define<Guid, DateTimeOffset>(LogLevel.Warning, new EventId(6101, "OutboxPublishFailed"),
             "Outbox publication failed for message {MessageId}; next retry at {NextAttemptAt}.");
@@ -72,6 +76,18 @@ public sealed class OutboxProcessor(
                         Quarantine(row, "Invalid event identity");
                         continue;
                     }
+
+                    // Restore the persisted request parent even when publication happens hours later.
+                    // Missing/invalid legacy context starts a new trace; publication never depends on telemetry.
+                    var hasParent = ActivityContext.TryParse(row.TraceParent, row.TraceState, out var parent);
+                    using var dispatch = Traces.StartActivity("rabbitmq publish ValueReceived.v1",
+                        ActivityKind.Producer, hasParent ? parent : default);
+                    dispatch?.SetTag("messaging.system", "rabbitmq");
+                    dispatch?.SetTag("messaging.destination.name", RabbitMqTopology.Exchange);
+                    dispatch?.SetTag("messaging.operation.name", "publish");
+                    dispatch?.SetTag("messaging.message.id", message.MessageId.ToString("D"));
+                    dispatch?.SetTag("messaging.message.conversation_id", message.CorrelationId);
+                    dispatch?.SetTag("lab.value.id", message.ValueId.ToString("D"));
 
                     // This timeout is driven by the same TimeProvider as polling and timestamps.
                     // An uncertain broker confirmation leaves the row pending for possible duplicate retry.

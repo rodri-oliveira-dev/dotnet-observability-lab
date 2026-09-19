@@ -55,7 +55,7 @@ model {
     ingestionOutboxWorker = container "Ingestion.Outbox.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Independently claims pending Outbox rows in ingestion_db and publishes persistent RabbitMQ events with broker confirmations."
+      description "Independently claims Outbox rows, restores persisted W3C trace context and publishes confirmed RabbitMQ events with a producer activity."
       outboxPoller = component "Outbox poller" {
         description "Selects bounded batches using PostgreSQL FOR UPDATE SKIP LOCKED; marks published only after broker confirmation."
       }
@@ -79,7 +79,7 @@ model {
     consolidationWorker = container "Consolidation.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Independent RabbitMQ consumer. Atomically persists Inbox and consolidated total to consolidation_db; Redis is not required for correctness."
+      description "Extracts W3C RabbitMQ headers and traces its independent Inbox/aggregate transaction; PostgreSQL owns correctness."
       rabbitConsumer = component "RabbitMQ consumer adapter" {
         description "Validates event and AMQP identity, acknowledges only after commit and rejects malformed messages."
       }
@@ -117,9 +117,15 @@ model {
     appHostDashboard = container ".NET Aspire AppHost / Dashboard" {
       #orchestration
       technology ".NET Aspire"
-      description "Starts and observes local resources and provides the development dashboard."
+      description "Starts local resources and receives OTLP OpenTelemetry spans, metrics and logs for development visualization; never routes business events."
     }
   }
+
+  // OTLP telemetry export to local visualization, independent of business communication.
+  lab.ingestionApi -> aspire.appHostDashboard "Exports OpenTelemetry spans, metrics and logs via OTLP"
+  lab.ingestionOutboxWorker -> aspire.appHostDashboard "Exports Outbox producer spans and telemetry via OTLP"
+  lab.consolidationWorker -> aspire.appHostDashboard "Exports RabbitMQ consumer/Inbox spans and telemetry via OTLP"
+  lab.consolidationApi -> aspire.appHostDashboard "Exports independent HTTP read traces and telemetry via OTLP"
 
   apiClient -> lab "Exercises the lab through HTTP"
   developer -> lab "Develops and studies the reference implementation"

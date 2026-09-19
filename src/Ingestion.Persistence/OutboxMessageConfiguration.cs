@@ -15,6 +15,8 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(100).IsRequired();
         builder.Property(x => x.Payload).HasColumnName("payload").HasColumnType("text").IsRequired();
         builder.Property(x => x.OccurredAt).HasColumnName("occurred_at").IsRequired();
+        builder.Property(x => x.TraceParent).HasColumnName("traceparent").HasMaxLength(256);
+        builder.Property(x => x.TraceState).HasColumnName("tracestate").HasMaxLength(512);
         builder.Property(x => x.PublishedAt).HasColumnName("published_at");
         builder.Property(x => x.QuarantinedAt).HasColumnName("quarantined_at");
         builder.Property(x => x.QuarantineReason).HasColumnName("quarantine_reason").HasMaxLength(200);

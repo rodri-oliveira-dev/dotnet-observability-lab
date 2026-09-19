@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Contracts;
 using Messaging;
@@ -26,11 +27,27 @@ internal sealed class RabbitMqOutboxMessagePublisher(IConnection connection) : I
             ContentType = "application/json",
             Type = RabbitMqTopology.ValueReceivedEventType,
             MessageId = message.EventId.ToString("D"),
-            CorrelationId = message.CorrelationId
+            CorrelationId = message.CorrelationId,
+            Headers = BuildTraceHeaders(Activity.Current)
         };
         await channel.BasicPublishAsync(RabbitMqTopology.Exchange,
             RabbitMqTopology.ValueReceivedRoutingKey, mandatory: true,
             basicProperties: properties, body: Encoding.UTF8.GetBytes(json),
             cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Encodes the active W3C producer span as RabbitMQ headers, if tracing is present.</summary>
+    internal static Dictionary<string, object?>? BuildTraceHeaders(Activity? activity)
+    {
+        if (activity is not { IdFormat: ActivityIdFormat.W3C } || activity.Id is null)
+            return null;
+
+        var headers = new Dictionary<string, object?>
+        {
+            ["traceparent"] = Encoding.UTF8.GetBytes(activity.Id)
+        };
+        if (!string.IsNullOrWhiteSpace(activity.TraceStateString))
+            headers["tracestate"] = Encoding.UTF8.GetBytes(activity.TraceStateString);
+        return headers;
     }
 }

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using Consolidation.Persistence;
 using Consolidation.Worker;
 using Contracts;
@@ -55,6 +57,33 @@ public sealed class ConsolidationProcessorTests
                 new ConsolidationProcessor(failing, TimeProvider.System).ProcessAsync(message, CancellationToken.None));
         await using var verify = new ConsolidationDbContext(options);
         Assert.False(await verify.InboxMessages.AnyAsync(x => x.MessageId == message.MessageId));
+    }
+
+    [Fact]
+    public void Consumer_extracts_W3C_headers_and_ignores_missing_or_invalid_carriers()
+    {
+        using var producer = new Activity("producer");
+        producer.SetIdFormat(ActivityIdFormat.W3C);
+        producer.Start();
+        Assert.NotNull(producer);
+        var valid = new Dictionary<string, object?>
+        {
+            ["traceparent"] = Encoding.UTF8.GetBytes(producer.Id!)
+        };
+        var parent = ConsolidationConsumer.ExtractParent(valid);
+        Assert.Equal(producer.TraceId, parent.TraceId);
+        Assert.Equal(producer.SpanId, parent.SpanId);
+
+        Assert.Equal(default, ConsolidationConsumer.ExtractParent(null));
+        Assert.Equal(default, ConsolidationConsumer.ExtractParent(new Dictionary<string, object?>()));
+        Assert.Equal(default, ConsolidationConsumer.ExtractParent(new Dictionary<string, object?>
+        {
+            ["traceparent"] = Encoding.UTF8.GetBytes("not-a-w3c-parent")
+        }));
+        Assert.Equal(default, ConsolidationConsumer.ExtractParent(new Dictionary<string, object?>
+        {
+            ["traceparent"] = new byte[] { 0xff, 0xfe }
+        }));
     }
 
     [Fact]

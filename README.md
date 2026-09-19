@@ -255,6 +255,43 @@ HTTP integration tests run the read API with a real PostgreSQL container,
 without starting the ingestion service or a broker. A Docker-compatible
 container engine is required.
 
+## End-to-end OpenTelemetry trace in the Aspire Dashboard
+
+ServiceDefaults configures OpenTelemetry tracing, runtime/HTTP metrics,
+structured logs and OTLP export. Aspire orchestrates the local processes and
+visualizes the exported telemetry; it does **not** carry business requests or
+messages. All four processes export telemetry when the AppHost supplies the
+`OTEL_EXPORTER_OTLP_ENDPOINT` environment variable. No extra telemetry backend
+or custom collector is needed in this lab.
+
+To verify one asynchronous causal chain:
+
+1. Start the AppHost, keep the Ingestion API, both workers, RabbitMQ and
+   PostgreSQL running, and open the **Traces** page in the Aspire Dashboard.
+2. POST a value to `$INGESTION_API_URL/values` with a **new**
+   `Idempotency-Key`. Record the returned value ID.
+3. Confirm publication and processing. In `ingestion_db`, query
+   `SELECT "Id", value_id, traceparent, tracestate, published_at FROM outbox_messages
+   ORDER BY occurred_at DESC LIMIT 5;`. The new row should have a non-null
+   `traceparent` and a `published_at` after confirmed publication.
+4. Locate that HTTP write trace in the Dashboard. Expand the asynchronous
+   `rabbitmq publish ValueReceived.v1` producer span from
+   `Ingestion.Outbox.Worker` and the `rabbitmq process ValueReceived.v1`
+   consumer span from `Consolidation.Worker`. Compare the `messaging.message.id`
+   attributes to the Outbox message ID; the spans share the original trace ID
+   even when the Outbox event is published later. The consumer span encloses
+   the PostgreSQL Inbox/consolidation work.
+5. Issue a separate `GET $CONSOLIDATION_API_URL/consolidated`. It should have
+   its own HTTP trace and return the last persisted aggregate, not join the
+   write's trace artificially.
+
+If the Outbox worker was previously stopped, restart it after the POST to
+demonstrate the delayed handoff without losing W3C context. Trace sampling can
+hide portions of a trace; select a sampled write when inspecting the Dashboard.
+Events created before the optional trace columns were introduced and external
+messages with invalid/missing headers still publish/consume successfully, but
+cannot be attached to an earlier trace.
+
 ## Repository conventions
 
 The engineering baseline is adapted from `rodri-oliveira-dev/poc-arquitetura`:

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -144,6 +145,28 @@ public sealed class IngestionEndpointTests(IngestionDatabaseFixture fixture)
         Assert.Equal(10.5m, payload.Value);
     }
 
+
+    [Fact]
+    public async Task New_outbox_message_persists_originating_W3C_trace_context()
+    {
+        using var origin = new Activity("caller");
+        origin.SetIdFormat(ActivityIdFormat.W3C);
+        origin.Start();
+        Assert.NotNull(origin);
+        using var factory = fixture.CreateFactory();
+        using var client = factory.CreateClient();
+        string key = NewKey();
+        using var response = await PostAsync(client, key, 14m, origin.Id);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        await using var database = fixture.CreateContext();
+        var value = await database.ReceivedValues.SingleAsync(x => x.IdempotencyKey == key);
+        var row = await database.OutboxMessages.SingleAsync(x => x.ValueId == value.Id);
+        Assert.NotNull(row.TraceParent);
+        Assert.True(ActivityContext.TryParse(row.TraceParent, row.TraceState, out var persisted));
+        Assert.Equal(origin.TraceId, persisted.TraceId);
+    }
+
     [Fact]
     public async Task Missing_key_or_value_returns_validation_problem_and_persists_nothing()
     {
@@ -272,13 +295,16 @@ public sealed class IngestionEndpointTests(IngestionDatabaseFixture fixture)
         }
     }
 
-    private static async Task<HttpResponseMessage> PostAsync(HttpClient client, string key, decimal? value)
+    private static async Task<HttpResponseMessage> PostAsync(HttpClient client, string key, decimal? value,
+        string? traceParent = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/values")
         {
             Content = JsonContent.Create(new { value })
         };
         request.Headers.Add("Idempotency-Key", key);
+        if (traceParent is not null)
+            request.Headers.TryAddWithoutValidation("traceparent", traceParent);
         return await client.SendAsync(request);
     }
 
