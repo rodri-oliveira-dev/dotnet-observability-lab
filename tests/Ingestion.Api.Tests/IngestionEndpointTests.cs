@@ -4,6 +4,8 @@ using System.Text.Json;
 using Contracts;
 using Ingestion.Api.Values;
 using Ingestion.Persistence;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -60,6 +62,7 @@ public sealed class IngestionDatabaseFixture : IAsyncLifetime
 
             builder.ConfigureTestServices(services =>
             {
+                services.AddExceptionHandler<DiagnosticExceptionHandler>();
                 services.RemoveAll<IDistributedCache>();
                 if (cacheUnavailable)
                 {
@@ -76,6 +79,16 @@ public sealed class IngestionDatabaseFixture : IAsyncLifetime
                     services.AddSingleton(clock);
                 }
             });
+        }
+    }
+
+    private sealed class DiagnosticExceptionHandler : IExceptionHandler
+    {
+        public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken ct)
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsync(exception.ToString(), ct);
+            return true;
         }
     }
 
@@ -110,7 +123,7 @@ public sealed class IngestionEndpointTests(IngestionDatabaseFixture fixture)
         string key = NewKey();
 
         using var response = await PostAsync(client, key, 10.5m);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         var receipt = await response.Content.ReadFromJsonAsync<ValueReceipt>();
         Assert.NotNull(receipt);
         Assert.Equal(10.5m, receipt.Value);
