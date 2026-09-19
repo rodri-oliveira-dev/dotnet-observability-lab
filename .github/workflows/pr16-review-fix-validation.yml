@@ -47,6 +47,15 @@ jobs:
           echo "===== APPHOST LOG ====="
           cat apphost.log || true
 
+          echo "===== ASPIRE DESCRIBE ====="
+          aspire describe --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj --format Json --non-interactive || true
+
+          echo "===== ASPIRE POSTGRES LOGS ====="
+          aspire logs postgres --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj --tail 200 --timestamps --non-interactive || true
+
+          echo "===== ASPIRE ALL RESOURCE LOGS ====="
+          aspire logs --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj --tail 200 --timestamps --non-interactive || true
+
           echo "===== CONTAINERS ====="
           docker ps -a || true
 
