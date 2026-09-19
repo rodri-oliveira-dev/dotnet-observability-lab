@@ -1,0 +1,30 @@
+name: Ingestion integration
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Directory.*'
+      - 'DotNetObservabilityLab.slnx'
+      - '.github/workflows/ingestion-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ingestion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore ./DotNetObservabilityLab.slnx
+      - name: Build
+        run: dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
+      - name: PostgreSQL integration tests
+        run: dotnet test ./tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj --configuration Release --no-build

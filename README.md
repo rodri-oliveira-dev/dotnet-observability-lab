@@ -21,7 +21,7 @@ The current baseline provides:
 - ADR governance with ADR Guard
 - architecture-as-code with LikeC4
 
-RabbitMQ, HTTP idempotency behavior, Outbox/Inbox processing, and application-level telemetry are introduced by later roadmap issues.
+HTTP ingestion idempotency and transactional Outbox storage are implemented. RabbitMQ publication, Inbox processing, consolidation, and application-level telemetry are introduced by later roadmap issues.
 
 ## Architecture style
 
@@ -112,6 +112,34 @@ The Aspire Dashboard should show:
 - `redis`
 
 The applications receive only role-specific PostgreSQL connection strings for their owned database. Redis is referenced only by `Ingestion.Api` and `Consolidation.Worker`.
+
+## Ingest a value
+
+After configuring local Aspire secrets and starting the AppHost, use its published
+Ingestion.Api base URL as INGESTION_API_URL:
+
+~~~bash
+curl -i -X POST "$INGESTION_API_URL/values" \
+  -H 'Idempotency-Key: order-123' \
+  -H 'Content-Type: application/json' \
+  -d '{"value":10.5}'
+~~~
+
+A new key returns HTTP 201 with a JSON receipt containing id and value. Repeating
+the same key with an equivalent numeric payload returns HTTP 200 with the same
+receipt; a different value under that key returns HTTP 409 ProblemDetails.
+Invalid or missing keys and values return HTTP 400 ProblemDetails.
+
+The API applies its ingestion database migrations at startup. Each accepted request
+persists a value and a pending ValueReceivedV1 Outbox message in one PostgreSQL
+transaction. Redis caches only committed receipts for 24 hours and is optional for
+correctness; the API does not publish directly to RabbitMQ.
+
+Integration tests require a running Docker-compatible engine:
+
+~~~bash
+dotnet test ./tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj --configuration Release
+~~~
 
 ## Repository conventions
 

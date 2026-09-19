@@ -10,4 +10,7 @@
     <Project Path="src/Ingestion.Outbox.Worker/Ingestion.Outbox.Worker.csproj" />
     <Project Path="src/Ingestion.Persistence/Ingestion.Persistence.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj" />
+  </Folder>
 </Solution>

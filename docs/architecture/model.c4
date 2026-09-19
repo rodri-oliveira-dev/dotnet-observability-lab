@@ -40,7 +40,16 @@ model {
     ingestionApi = container "Ingestion.Api" {
       #api
       technology ".NET 10 / ASP.NET Core Minimal API"
-      description "Write-side HTTP boundary. Uses ingestion_db through the non-superuser ingestion_app role and receives Redis only for the later HTTP idempotency fast path."
+      description "Write-side HTTP boundary. Validates POST /values and atomically persists one value and Outbox message in ingestion_db."
+      valuesEndpoint = component "HTTP ingestion endpoint" {
+        description "Validates Idempotency-Key and decimal payload, then translates success, replay, validation errors and conflicts to HTTP."
+      }
+      ingestionUseCase = component "Idempotent ingestion use case" {
+        description "Computes the request fingerprint, resolves replays and owns one value and its pending integration event."
+      }
+      ingestionPersistence = component "EF Core transactional persistence" {
+        description "Persists a value and pending Outbox message atomically; PostgreSQL uniqueness resolves concurrent requests."
+      }
     }
 
     ingestionOutboxWorker = container "Ingestion.Outbox.Worker" {
@@ -115,4 +124,10 @@ model {
 
   lab.ingestionOutboxWorker -> lab.rabbitmq "Will publish integration events"
   lab.rabbitmq -> lab.consolidationWorker "Will deliver integration events"
+  apiClient -> lab.ingestionApi.valuesEndpoint "POST /values with Idempotency-Key"
+  lab.ingestionApi.valuesEndpoint -> lab.ingestionApi.ingestionUseCase "Delegates the validated request"
+  lab.ingestionApi.ingestionUseCase -> lab.ingestionApi.ingestionPersistence "Reads original receipt or commits value and Outbox"
+  lab.ingestionApi.ingestionUseCase -> lab.redis "Optionally caches committed receipts"
+  lab.ingestionApi.ingestionPersistence -> lab.postgresql "Uses ingestion_db and its unique key constraint"
+
 }

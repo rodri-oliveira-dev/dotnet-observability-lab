@@ -54,7 +54,7 @@ The PostgreSQL administrator credential is used only by the local PostgreSQL res
 
 Redis is also a current Aspire resource, but it is deliberately wired only to:
 
-- `Ingestion.Api` for the later HTTP idempotency fast path;
+- `Ingestion.Api` for the implemented HTTP idempotency fast path;
 - `Consolidation.Worker` for the later duplicate-message fast path.
 
 Redis is not persistent correctness state. PostgreSQL remains authoritative.
@@ -69,7 +69,7 @@ Answers:
 
 > How is one application boundary organized internally around its meaningful responsibilities?
 
-Component views are intentionally deferred until the corresponding behavior exists. Later issues add component views for ingestion, Outbox publication, consolidation, and read-side querying.
+The ingestionComponents view now shows the implemented HTTP endpoint, idempotent ingestion use case, and transactional EF Core persistence boundary. Later issues add component views for Outbox publication, consolidation, and read-side querying.
 
 Do not create a component for every class. A component should represent a meaningful responsibility, boundary, port, adapter, hosted service, or processing stage.
 
