@@ -174,7 +174,21 @@ OpenTelemetry
 
 Aspire must not be drawn as if business requests or integration events pass through the AppHost/Dashboard.
 
-The OpenTelemetry architectural decision and end-to-end propagation are introduced by their dedicated roadmap issue.
+[ADR 0005](../adr/0005-use-opentelemetry-as-the-observability-standard.md)
+establishes OpenTelemetry as the common trace, metrics and structured-log
+standard. ServiceDefaults configures automatic ASP.NET Core, HttpClient and
+runtime instrumentation plus OTLP export to the local Aspire Dashboard.
+
+The write request's W3C context is committed alongside the Outbox event;
+the publisher restores it into a producer span and injects RabbitMQ headers,
+which the consolidation worker extracts into a consumer span around the Inbox
+transaction. The later read request starts a **separate HTTP trace**.
+Missing or invalid context does not block business processing.
+
+The C4 Container view shows four explicit **OTLP telemetry export** edges
+from the processes to the Aspire Dashboard; those edges are not API calls or
+broker/business-event delivery. Point the standard OTLP exporter to another
+compatible collector when running outside the local development environment.
 
 ## Files
 
