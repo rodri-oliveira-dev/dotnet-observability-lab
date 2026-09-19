@@ -19,8 +19,11 @@ var postgres = builder.AddPostgres("postgres", password: postgresPassword)
 
 // The PostgreSQL bootstrap script creates these databases with their boundary-specific owners.
 // Aspire registers them here for readiness checks and resource discovery.
-var ingestionDatabase = postgres.AddDatabase("ingestion-db", "ingestion_db");
-var consolidationDatabase = postgres.AddDatabase("consolidation-db", "consolidation_db");
+var ingestionDatabase = postgres.AddDatabase("ingestion-db", "ingestion_db")
+    .WithCreationScript("SELECT 1;");
+
+var consolidationDatabase = postgres.AddDatabase("consolidation-db", "consolidation_db")
+    .WithCreationScript("SELECT 1;");
 
 var postgresEndpoint = postgres.Resource.PrimaryEndpoint;
 
