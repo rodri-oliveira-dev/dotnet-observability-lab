@@ -22,8 +22,8 @@ Revisar alterações com foco em risco real e comportamento observável, produzi
 
 # Severidade
 
-- **P0 — Blocker:** perda de dados, falha crítica de segurança, pacote inutilizável ou quebra ampla inevitável.
-- **P1 — High:** bug funcional provável, breaking change não intencional, falha de concorrência, vulnerabilidade relevante ou release incorreto.
+- **P0 — Blocker:** perda de dados, falha crítica de segurança, perda de integridade de eventos ou quebra ampla inevitável.
+- **P1 — High:** bug funcional provável, breaking change não intencional, falha de concorrência, vulnerabilidade relevante ou quebra de isolamento entre os serviços.
 - **P2 — Medium:** defeito real em cenário limitado, teste insuficiente para comportamento relevante ou risco significativo de manutenção/performance.
 - **P3 — Low:** melhoria objetiva que não bloqueia o merge por si só.
 

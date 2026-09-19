@@ -33,7 +33,7 @@ Usar cobertura como sinal de risco, não como objetivo isolado. A análise deve 
 
 # Fonte de cobertura
 
-O laboratório ainda não possui pipeline oficial de cobertura. Use apenas ferramentas que já estejam configuradas ou obtenha aprovação para introduzir uma nova dependência. Quando existir Coverlet compatível com o runner, use o comando específico do projeto de testes:
+O laboratório ainda não possui pipeline oficial de cobertura. Use apenas ferramentas que já estejam configuradas ou obtenha aprovação para introduzir uma nova dependência. Somente quando um collector de cobertura compatível estiver configurado, use o comando específico do projeto de testes:
 
 ```bash
 dotnet test ./tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage"
@@ -70,8 +70,9 @@ Após ajustes em testes:
 dotnet restore ./DotNetObservabilityLab.slnx
 dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
 dotnet test ./DotNetObservabilityLab.slnx --configuration Release --no-build
-dotnet test ./tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage"
 ```
+
+Se a coleta de cobertura estiver configurada, execute adicionalmente o comando da seção *Fonte de cobertura*.
 
 # Critério de qualidade
 
