@@ -107,12 +107,12 @@ jobs:
 
                 databases="$(docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                   psql -h 127.0.0.1 -U postgres -Atc "SELECT datname FROM pg_database WHERE datname IN ('ingestion_db', 'consolidation_db') ORDER BY datname;" 2>/dev/null || true)"
 
-                roles="$(docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                   psql -h 127.0.0.1 -U postgres -Atc "SELECT rolname || ':' || rolsuper FROM pg_roles WHERE rolname IN ('ingestion_app', 'consolidation_app') ORDER BY rolname;" 2>/dev/null || true)"
+                roles="$(docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                   psql -h 127.0.0.1 -U postgres -Atc "SELECT rolname || ':' || CASE WHEN rolsuper THEN 'superuser' ELSE 'non-superuser' END FROM pg_roles WHERE rolname IN ('ingestion_app', 'consolidation_app') ORDER BY rolname;" 2>/dev/null || true)"
 
                 if echo "$databases" | grep -qx 'consolidation_db' &&
                    echo "$databases" | grep -qx 'ingestion_db' &&
-                   echo "$roles" | grep -qx 'consolidation_app:f' &&
-                   echo "$roles" | grep -qx 'ingestion_app:f'; then
+                   echo "$roles" | grep -qx 'consolidation_app:non-superuser' &&
+                   echo "$roles" | grep -qx 'ingestion_app:non-superuser'; then
                   ready=true
                   break
                 fi
