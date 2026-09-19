@@ -76,13 +76,18 @@ transport metadata.
 
 The `Contracts` and `*.Persistence` projects are not shown as runtime containers because they are code/build dependencies, not separately running processes.
 
+The read API continues to answer `GET /consolidated` from `consolidation_db`
+when ingestion, RabbitMQ or the consumer is stopped. The model shows no
+`Consolidation.Api` → `Ingestion.Api` relationship. Database readiness for
+the read API depends only on `consolidation_db`.
+
 ### Level 3 — Component
 
 Answers:
 
 > How is one application boundary organized internally around its meaningful responsibilities?
 
-The ingestionComponents view now shows the implemented HTTP endpoint, idempotent ingestion use case, and transactional EF Core persistence boundary. The outboxPublisherComponents view models the dedicated poller, the confirmed RabbitMQ adapter and their infrastructure boundaries. The consolidationComponents view models the active RabbitMQ consumer, transactional Inbox processor and PostgreSQL store. A later issue adds read-side HTTP querying.
+The ingestionComponents view now shows the implemented HTTP endpoint, idempotent ingestion use case, and transactional EF Core persistence boundary. The outboxPublisherComponents view models the dedicated poller, the confirmed RabbitMQ adapter and their infrastructure boundaries. The consolidationComponents view models the active RabbitMQ consumer, transactional Inbox processor and PostgreSQL store. The consolidationApiComponents view shows the independent HTTP read endpoint and the read-only database query, with no synchronous dependency on Ingestion.Api or RabbitMQ.
 
 Do not create a component for every class. A component should represent a meaningful responsibility, boundary, port, adapter, hosted service, or processing stage.
 

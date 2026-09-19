@@ -87,6 +87,16 @@ views {
     autoLayout LeftRight
   }
 
+  view consolidationApiComponents of lab.consolidationApi {
+    title "C4 Level 3 - Consolidation.Api"
+    description "Independent HTTP read endpoint and read-only PostgreSQL query; no Ingestion.Api or RabbitMQ dependency."
+    include apiClient
+    include lab.consolidationApi.consolidatedEndpoint
+    include lab.consolidationApi.consolidatedQuery
+    include lab.postgresql
+    autoLayout LeftRight
+  }
+
   view consolidationComponents of lab.consolidationWorker {
     title "C4 Level 3 - Consolidation.Worker"
     description "Manual RabbitMQ acknowledgements after atomic PostgreSQL Inbox and read-model commit."
@@ -100,7 +110,7 @@ views {
 
   view containers of lab {
     title "C4 Level 2 - Containers"
-    description "Shows the four .NET processes, PostgreSQL/Redis resources, strict database ownership, and the implemented RabbitMQ broker/topology. Outbox publication is implemented; Inbox consumption and atomic consolidation are implemented."
+    description "Shows independent read and write API processes, PostgreSQL/Redis resources, strict database ownership, and the implemented RabbitMQ broker/topology. Outbox publication is implemented; Inbox consumption and atomic consolidation are implemented."
     include apiClient
     include developer
     include lab.ingestionApi

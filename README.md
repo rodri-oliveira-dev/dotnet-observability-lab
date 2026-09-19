@@ -211,7 +211,7 @@ FROM consolidated_totals WHERE id = 1;
 SELECT message_id, processed_at FROM inbox_messages ORDER BY processed_at DESC LIMIT 20;
 ```
 
-The read API does not expose the aggregate over HTTP yet. Re-publishing an event
+The read API exposes the aggregate through `GET /consolidated`. Re-publishing an event
 with the **same AMQP MessageId and payload EventId** should leave `count`,
 `sum`, `last_updated_at` and the Inbox row count unchanged. The PostgreSQL
 Inbox primary key protects duplicates even after Redis data loss; Redis is not
@@ -225,6 +225,35 @@ dotnet test ./tests/Consolidation.Worker.Tests/Consolidation.Worker.Tests.csproj
 ```
 
 The consolidation integration tests require a Docker-compatible engine.
+
+## Read the last consolidated state independently
+
+Use the `consolidation-api` URL from the Aspire Dashboard and request:
+
+```bash
+curl -i "$CONSOLIDATION_API_URL/consolidated"
+```
+
+Before any event is processed, the response is HTTP 200 with
+`{"count":0,"sum":0,"average":0,"lastUpdatedAt":null}`.
+After a confirmed consolidation it returns the persisted `count`, `sum`,
+derived `average` and `lastUpdatedAt` (UTC); it never contacts the
+Ingestion API, RabbitMQ or `ingestion_db` to serve reads.
+
+To demonstrate independence: POST values through `ingestion-api`, allow the
+Outbox and consolidation worker to finish, record `GET /consolidated`, then
+stop **only** `ingestion-api` in the Aspire Dashboard. Repeat the GET; the
+same durable snapshot remains available. The read API does not invent values
+while upstream is down. The API starts with `consolidation_db` only and has
+no ingestion or RabbitMQ startup/readiness dependency.
+
+```bash
+dotnet test ./tests/Consolidation.Api.Tests/Consolidation.Api.Tests.csproj --configuration Release
+```
+
+HTTP integration tests run the read API with a real PostgreSQL container,
+without starting the ingestion service or a broker. A Docker-compatible
+container engine is required.
 
 ## Repository conventions
 

@@ -25,4 +25,4 @@ app.MapGet("/consolidated", async (ConsolidatedQuery query, CancellationToken ca
 app.Run();
 
 // Enables HTTP integration tests without exposing application internals.
-public partial class Program;
+public partial class Program { }
