@@ -64,6 +64,8 @@ jobs:
         run: dotnet test ./tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj --configuration Release --no-build
       - name: Messaging contract tests
         run: dotnet test ./tests/Messaging.Contracts.Tests/Messaging.Contracts.Tests.csproj --configuration Release --no-build
+      - name: Outbox publisher PostgreSQL integration tests
+        run: dotnet test ./tests/Ingestion.Outbox.Worker.Tests/Ingestion.Outbox.Worker.Tests.csproj --configuration Release --no-build
       - name: ADR Guard
         if: always()
         run: |

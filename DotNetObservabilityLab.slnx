@@ -13,6 +13,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Ingestion.Api.Tests/Ingestion.Api.Tests.csproj" />
+    <Project Path="tests/Ingestion.Outbox.Worker.Tests/Ingestion.Outbox.Worker.Tests.csproj" />
     <Project Path="tests/Messaging.Contracts.Tests/Messaging.Contracts.Tests.csproj" />
   </Folder>
 </Solution>
