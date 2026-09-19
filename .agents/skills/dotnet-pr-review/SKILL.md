@@ -13,12 +13,12 @@ Revisar alterações com foco em risco real e comportamento observável, produzi
 1. Leia `AGENTS.md`, a descrição do PR e a issue relacionada quando disponível.
 2. Entenda o objetivo e o comportamento esperado antes de avaliar a implementação.
 3. Revise primeiro o diff; expanda arquivos completos apenas quando o contexto do trecho for insuficiente.
-4. Avalie riscos em corretude, contrato HTTP/eventos públicos/compatibilidade, concorrência/estado, performance/I/O, segurança, dependências, testes, CI/packaging/release e manutenção.
+4. Avalie riscos em corretude, contrato HTTP/eventos públicos/compatibilidade, concorrência/estado, performance/I/O, segurança, dependências, testes, CI, fronteiras de dados/mensageria e manutenção.
 5. Delegue inventário do diff, busca de referências e localização de testes quando houver workers/subagentes; mantenha severidade e conclusão no agente principal.
 6. Para cada problema, confirme que ele é introduzido ou materialmente agravado pelo diff e descreva um cenário concreto de falha.
 7. Verifique se os testes protegem o novo comportamento e se quality gates foram preservados.
 8. Execute validações direcionadas e a baseline de `AGENTS.md` quando o ambiente permitir.
-9. Revise o conjunto final para detectar escopo acidental, dependência não explicada ou mudança pública sem documentação/changelog.
+9. Revise o conjunto final para detectar escopo acidental, dependência não explicada ou mudança de contrato HTTP/eventos sem documentação ou atualização do modelo arquitetural.
 
 # Severidade
 

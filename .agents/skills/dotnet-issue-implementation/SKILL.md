@@ -28,7 +28,7 @@ Combine quando necessário com:
 - `dotnet-refactoring-engineer` quando o escopo for exclusivamente refatoração;
 - `dotnet-refactoring-engineer` para refatoração preservando comportamento;
 - `coverage-analysis` ou `test-anti-patterns` para riscos de teste;
-- `ci-workflow-governance` para CI, packaging ou release;
+- `ci-workflow-governance` para alterações no CI e em workflows existentes;
 - `dotnet-security-review` para superfície de segurança relevante.
 
 # Restrições específicas

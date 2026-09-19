@@ -41,7 +41,7 @@ MSBuild auto-imports the first `Directory.Build.props`/`.targets` it finds walki
 
 1. Audit relevant `.csproj`, `Directory.Build.props`, `Directory.Build.targets`, and `Directory.Packages.props` files.
 2. Identify duplicated vs project-specific settings.
-3. Preserve existing ownership of versioning, analyzers, packaging, and warnings.
+3. Preserve existing ownership of analyzers, package references, target framework, and warnings.
 4. Move only clearly shared defaults into `.props`.
 5. Keep custom targets/late SDK-dependent logic in `.targets`.
 6. Validate with restore/build/test and, when needed, preprocessed MSBuild output.
@@ -58,6 +58,6 @@ dotnet msbuild -pp:output.xml path/to/Project.csproj
 - [ ] CPM remains consistent
 - [ ] Project-specific settings were not generalized without evidence
 - [ ] Restore/build/test still pass
-- [ ] Packaging metadata/output remains unchanged unless intentionally modified
+- [ ] Build, test, and architecture tooling behavior remains unchanged unless intentionally modified
 
 See [references/common-patterns.md](references/common-patterns.md) for common layouts and validation examples.
