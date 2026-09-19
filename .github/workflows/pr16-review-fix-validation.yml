@@ -1,0 +1,144 @@
+name: PR 16 review fix validation
+
+on:
+  push:
+    branches:
+      - feat/issue-3-postgres-redis
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Generate ephemeral validation credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          admin_password="$(openssl rand -hex 24)"
+          ingestion_password="$(openssl rand -hex 24)"
+          consolidation_password="$(openssl rand -hex 24)"
+
+          {
+            echo "Parameters__postgres-password=$admin_password"
+            echo "Parameters__ingestion-db-password=$ingestion_password"
+            echo "Parameters__consolidation-db-password=$consolidation_password"
+            echo "POSTGRES_TEST_PASSWORD=$admin_password"
+            echo "INGESTION_TEST_PASSWORD=$ingestion_password"
+            echo "CONSOLIDATION_TEST_PASSWORD=$consolidation_password"
+          } >> "$GITHUB_ENV"
+
+      - name: Restore tools and dependencies
+        run: |
+          dotnet tool restore
+          dotnet restore ./DotNetObservabilityLab.slnx
+          npm ci
+
+      - name: Validate architecture
+        run: |
+          dotnet tool run adr-guard check docs/adr
+          npm run architecture:format:check
+          npm run architecture:validate
+          npm run architecture:build
+
+      - name: Build solution
+        run: dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
+
+      - name: Validate migration bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dotnet ef migrations add ReviewFixValidation             --project src/Ingestion.Persistence             --context IngestionDbContext             --output-dir Migrations/ReviewFixValidation
+
+          dotnet ef migrations add ReviewFixValidation             --project src/Consolidation.Persistence             --context ConsolidationDbContext             --output-dir Migrations/ReviewFixValidation
+
+          rm -rf             src/Ingestion.Persistence/Migrations/ReviewFixValidation             src/Consolidation.Persistence/Migrations/ReviewFixValidation
+
+      - name: Smoke test PostgreSQL role isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dotnet build ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj --no-restore
+
+          dotnet run             --project ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj             --no-build > apphost.log 2>&1 &
+
+          apphost_pid=$!
+
+          cleanup() {
+            kill "$apphost_pid" 2>/dev/null || true
+          }
+
+          trap cleanup EXIT
+
+          postgres_id=""
+
+          for attempt in $(seq 1 60); do
+            if ! kill -0 "$apphost_pid" 2>/dev/null; then
+              cat apphost.log
+              docker ps -a
+              exit 1
+            fi
+
+            postgres_id="$(docker ps --format '{{.ID}} {{.Image}}' | awk '/postgres/ {print $1; exit}')"
+            redis_count="$(docker ps --format '{{.Image}}' | grep -ci 'redis' || true)"
+
+            if [ -n "$postgres_id" ] && [ "$redis_count" -ge 1 ]; then
+              if docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                 pg_isready -U postgres >/dev/null 2>&1; then
+
+                databases="$(docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                   psql -U postgres -Atc "SELECT datname FROM pg_database WHERE datname IN ('ingestion_db', 'consolidation_db') ORDER BY datname;" 2>/dev/null || true)"
+
+                roles="$(docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                   psql -U postgres -Atc "SELECT rolname || ':' || rolsuper FROM pg_roles WHERE rolname IN ('ingestion_app', 'consolidation_app') ORDER BY rolname;" 2>/dev/null || true)"
+
+                if echo "$databases" | grep -qx 'consolidation_db' &&
+                   echo "$databases" | grep -qx 'ingestion_db' &&
+                   echo "$roles" | grep -qx 'consolidation_app:false' &&
+                   echo "$roles" | grep -qx 'ingestion_app:false'; then
+                  break
+                fi
+              fi
+            fi
+
+            sleep 2
+          done
+
+          test -n "$postgres_id"
+
+          docker exec -e PGPASSWORD="$INGESTION_TEST_PASSWORD" "$postgres_id"             psql -U ingestion_app -d ingestion_db -Atc "SELECT current_user;" |
+            grep -qx 'ingestion_app'
+
+          docker exec -e PGPASSWORD="$CONSOLIDATION_TEST_PASSWORD" "$postgres_id"             psql -U consolidation_app -d consolidation_db -Atc "SELECT current_user;" |
+            grep -qx 'consolidation_app'
+
+          if docker exec -e PGPASSWORD="$INGESTION_TEST_PASSWORD" "$postgres_id"             psql -U ingestion_app -d consolidation_db -Atc "SELECT 1;" >/tmp/ingestion-cross.out 2>/tmp/ingestion-cross.err; then
+            echo "ingestion_app unexpectedly connected to consolidation_db"
+            cat /tmp/ingestion-cross.out
+            exit 1
+          fi
+
+          if docker exec -e PGPASSWORD="$CONSOLIDATION_TEST_PASSWORD" "$postgres_id"             psql -U consolidation_app -d ingestion_db -Atc "SELECT 1;" >/tmp/consolidation-cross.out 2>/tmp/consolidation-cross.err; then
+            echo "consolidation_app unexpectedly connected to ingestion_db"
+            cat /tmp/consolidation-cross.out
+            exit 1
+          fi
+
+          cat apphost.log
+          docker ps
+
+          echo "Verified:"
+          echo "- ingestion_app is non-superuser and accesses ingestion_db"
+          echo "- consolidation_app is non-superuser and accesses consolidation_db"
+          echo "- cross-database access is denied in both directions"
