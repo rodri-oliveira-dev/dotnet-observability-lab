@@ -65,6 +65,18 @@ views {
     autoLayout LeftRight
   }
 
+  view ingestionComponents of lab.ingestionApi {
+    title "C4 Level 3 - Ingestion.Api"
+    description "Shows the HTTP write boundary, idempotency, Redis optimization and the atomic PostgreSQL Outbox write."
+    include apiClient
+    include lab.ingestionApi.valuesEndpoint
+    include lab.ingestionApi.ingestionUseCase
+    include lab.ingestionApi.ingestionPersistence
+    include lab.postgresql
+    include lab.redis
+    autoLayout LeftRight
+  }
+
   view containers of lab {
     title "C4 Level 2 - Containers"
     description "Shows the four .NET processes, the implemented PostgreSQL/Redis resources, strict database ownership, and RabbitMQ as the remaining future messaging resource."

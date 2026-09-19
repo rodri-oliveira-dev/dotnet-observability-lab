@@ -49,3 +49,25 @@ Trade-offs and constraints:
 - later implementations must define cache invalidation/retention behavior without assuming cache permanence;
 - telemetry must distinguish durable idempotency decisions from cache hits/misses;
 - Redis health must not be confused with the correctness of persisted business state.
+
+## Implemented HTTP ingestion semantics (issue #4)
+
+The ingestion API stores one received value with a unique Idempotency-Key, a SHA-256
+fingerprint of the decimal value's invariant G29 representation, and one pending Outbox
+event in the same PostgreSQL transaction.
+
+- A repeated key with an equivalent numeric value returns the original value ID and HTTP 200;
+  a first successful request returns HTTP 201.
+- Reusing the key with a different numeric value returns HTTP 409 ProblemDetails without
+  writing another value or event. Input errors return HTTP 400 ProblemDetails.
+- The unique constraint in PostgreSQL settles concurrent inserts. A losing transaction
+  reads the committed winning record after its own transaction is rolled back.
+- The optional Redis entry stores only a committed result, with a bounded 24-hour TTL.
+  Its cache key hashes the caller key rather than exposing it in a Redis key name.
+  Cache misses, expiration and failures fall back to the authoritative database.
+- The API never publishes to RabbitMQ. It stores a versioned integration event as a
+  pending Outbox message; a separate worker will publish it in a later issue.
+
+The ingestion API alone applies its schema migrations at startup; its worker shares the
+persistence model but does not execute migrations. The consolidation boundary remains
+independent and does not read the ingestion database.
