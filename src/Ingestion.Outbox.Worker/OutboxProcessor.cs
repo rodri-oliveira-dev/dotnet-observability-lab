@@ -40,8 +40,12 @@ public sealed class OutboxProcessor(
     public async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
     {
         var strategy = database.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
+        var batch = await strategy.ExecuteAsync(async () =>
         {
+            // Each execution-strategy attempt owns its own notifications. A rolled-back
+            // attempt must never report a durable publication or scheduled retry.
+            List<PublishFailure> failures = [];
+            List<QuarantinedMessage> quarantined = [];
             await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
 
             // Npgsql's FOR UPDATE SKIP LOCKED is safe across multiple worker instances.
@@ -59,7 +63,7 @@ public sealed class OutboxProcessor(
                 {
                     if (row.EventType != nameof(ValueReceivedV1))
                     {
-                        Quarantine(row, "Unsupported event type");
+                        Quarantine(row, "Unsupported event type", quarantined);
                         continue;
                     }
 
@@ -70,14 +74,14 @@ public sealed class OutboxProcessor(
                     }
                     catch (JsonException)
                     {
-                        Quarantine(row, "Malformed JSON payload");
+                        Quarantine(row, "Malformed JSON payload", quarantined);
                         continue;
                     }
 
                     if (message is null || message.EventId == Guid.Empty || message.ValueId == Guid.Empty ||
                         message.EventId != row.Id || message.ValueId != row.ValueId)
                     {
-                        Quarantine(row, "Invalid event identity");
+                        Quarantine(row, "Invalid event identity", quarantined);
                         continue;
                     }
 
@@ -118,22 +122,42 @@ public sealed class OutboxProcessor(
                     var retrySeconds = Math.Min(options.Value.MaxRetryDelay.TotalSeconds,
                         options.Value.RetryDelay.TotalSeconds * multiplier);
                     row.NextAttemptAt = clock.GetUtcNow().AddSeconds(retrySeconds);
-                    OutboxTelemetry.PublicationFailures.Add(1);
-                    PublishFailed(logger, row.Id, row.ValueId, row.NextAttemptAt.Value, exception);
+                    failures.Add(new PublishFailure(row.Id, row.ValueId, row.NextAttemptAt.Value, exception));
                 }
             }
 
             await database.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
-            foreach (var row in messages.Where(x => x.PublishedAt is not null))
-            {
-                // Count only confirmed publications durably marked after the transaction commits.
-                OutboxTelemetry.PublishedMessages.Add(1);
-                Published(logger, row.Id, row.ValueId, null);
-            }
+            return new BatchResult(published,
+                messages.Where(x => x.PublishedAt is not null)
+                    .Select(x => new PublishedMessage(x.Id, x.ValueId)).ToArray(),
+                failures, quarantined);
+        });
 
-            // Sample the complete pending backlog, including deferred retries, rather than
+        // Do not emit externally visible events from the execution-strategy delegate:
+        // a failed commit or replayed delegate must not duplicate success/failure logs
+        // or counters for retry schedules that never became durable.
+        foreach (var failure in batch.Failures)
+        {
+            OutboxTelemetry.PublicationFailures.Add(1);
+            PublishFailed(logger, failure.MessageId, failure.ValueId,
+                failure.NextAttemptAt, failure.Cause);
+        }
+
+        foreach (var quarantined in batch.Quarantined)
+        {
+            Quarantined(logger, quarantined.MessageId, quarantined.ValueId,
+                quarantined.Reason, null);
+        }
+
+        foreach (var message in batch.PublishedMessages)
+        {
+            OutboxTelemetry.PublishedMessages.Add(1);
+            Published(logger, message.MessageId, message.ValueId, null);
+        }
+
+        // Sample the complete pending backlog, including deferred retries, rather than
             // inferring it from the bounded claimed batch. Observability is best-effort.
             try
             {
@@ -146,14 +170,23 @@ public sealed class OutboxProcessor(
                 PendingCountFailure(logger, exception);
             }
 
-            return published;
-        });
+        return batch.Published;
     }
 
-    private void Quarantine(OutboxMessage row, string reason)
+    private void Quarantine(OutboxMessage row, string reason, List<QuarantinedMessage> quarantined)
     {
         row.QuarantinedAt = clock.GetUtcNow();
         row.QuarantineReason = reason;
-        Quarantined(logger, row.Id, row.ValueId, reason, null);
+        quarantined.Add(new QuarantinedMessage(row.Id, row.ValueId, reason));
     }
+
+    private sealed record BatchResult(int Published, PublishedMessage[] PublishedMessages,
+        List<PublishFailure> Failures, List<QuarantinedMessage> Quarantined);
+
+    private sealed record PublishedMessage(Guid MessageId, Guid ValueId);
+
+    private sealed record PublishFailure(Guid MessageId, Guid ValueId, DateTimeOffset NextAttemptAt,
+        Exception Cause);
+
+    private sealed record QuarantinedMessage(Guid MessageId, Guid ValueId, string Reason);
 }
