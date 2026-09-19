@@ -74,3 +74,30 @@ event in the same PostgreSQL transaction.
 The ingestion API alone applies its schema migrations at startup; its worker shares the
 persistence model but does not execute migrations. The consolidation boundary remains
 independent and does not read the ingestion database.
+
+## Implemented consolidation Inbox semantics (issue #7)
+
+The current consumer uses `ValueReceivedV1.EventId` as the durable `MessageId`.
+The primary key on `consolidation_db.inbox_messages.message_id` is the authoritative
+deduplication guard, including when multiple worker instances receive the same event.
+The consumer does not consult Redis; its Aspire reference is reserved for a possible
+optimization. Cache eviction or outage cannot cause a second aggregate update.
+
+Each delivery inserts its Inbox identity with `ON CONFLICT DO NOTHING`. If this
+transaction wins the insert, it updates the singleton consolidated read model
+(`Count`, `Sum`, and `LastUpdatedAt`) in the **same database transaction**.
+`Average` is derived as `Sum / Count`, or zero for an empty model. The UPSERT
+serializes increments by distinct events and uses `GREATEST` to prevent the
+last-updated timestamp from regressing under concurrent processing. A duplicate
+does not mutate the aggregate.
+
+The transport edge acknowledges a message only after the transaction commits,
+including a duplicate already committed by another delivery. A crash before
+commit rolls back both writes; a crash between commit and ack allows a safe
+redelivery without double counting. Missing required wire fields, malformed
+events and mismatched AMQP/payload identities are rejected without requeue.
+Transient database errors are requeued, preserving at-least-once delivery;
+a bounded retry/backoff and dead-letter queue are future operational work.
+
+The consolidation worker applies migrations only to its own database and
+does not read `ingestion_db`. No transaction spans PostgreSQL, Redis and RabbitMQ.

@@ -87,9 +87,20 @@ views {
     autoLayout LeftRight
   }
 
+  view consolidationComponents of lab.consolidationWorker {
+    title "C4 Level 3 - Consolidation.Worker"
+    description "Manual RabbitMQ acknowledgements after atomic PostgreSQL Inbox and read-model commit."
+    include lab.rabbitmq
+    include lab.consolidationWorker.rabbitConsumer
+    include lab.consolidationWorker.inboxProcessor
+    include lab.consolidationWorker.consolidationStore
+    include lab.postgresql
+    autoLayout LeftRight
+  }
+
   view containers of lab {
     title "C4 Level 2 - Containers"
-    description "Shows the four .NET processes, PostgreSQL/Redis resources, strict database ownership, and the implemented RabbitMQ broker/topology. Outbox publication is implemented; Inbox consumption remains planned."
+    description "Shows the four .NET processes, PostgreSQL/Redis resources, strict database ownership, and the implemented RabbitMQ broker/topology. Outbox publication is implemented; Inbox consumption and atomic consolidation are implemented."
     include apiClient
     include developer
     include lab.ingestionApi
