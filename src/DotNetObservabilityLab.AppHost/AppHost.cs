@@ -16,7 +16,7 @@ var postgresInitDirectory = Path.Combine(builder.AppHostDirectory, "postgres-ini
 var postgres = builder.AddPostgres("postgres", password: postgresPassword)
     .WithEnvironment("INGESTION_DB_PASSWORD", ingestionDatabasePassword)
     .WithEnvironment("CONSOLIDATION_DB_PASSWORD", consolidationDatabasePassword)
-    .WithInitFiles(postgresInitDirectory)
+    .WithBindMount(postgresInitDirectory, "/docker-entrypoint-initdb.d", isReadOnly: true)
     .WithDataVolume();
 
 var ingestionDatabase = postgres
