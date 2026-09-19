@@ -92,7 +92,7 @@ jobs:
           postgres_id=""
           ready=false
 
-          for attempt in $(seq 1 15); do
+          for attempt in $(seq 1 60); do
             if ! kill -0 "$apphost_pid" 2>/dev/null; then
               cat apphost.log
               docker ps -a
@@ -103,11 +103,11 @@ jobs:
             redis_count="$(docker ps --format '{{.Image}}' | grep -ci 'redis' || true)"
 
             if [ -n "$postgres_id" ] && [ "$redis_count" -ge 1 ]; then
-              if docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                 pg_isready -U postgres >/dev/null 2>&1; then
+              if docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                 pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then
 
-                databases="$(docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                   psql -U postgres -Atc "SELECT datname FROM pg_database WHERE datname IN ('ingestion_db', 'consolidation_db') ORDER BY datname;" 2>/dev/null || true)"
+                databases="$(docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                   psql -h 127.0.0.1 -U postgres -Atc "SELECT datname FROM pg_database WHERE datname IN ('ingestion_db', 'consolidation_db') ORDER BY datname;" 2>/dev/null || true)"
 
-                roles="$(docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                   psql -U postgres -Atc "SELECT rolname || ':' || rolsuper FROM pg_roles WHERE rolname IN ('ingestion_app', 'consolidation_app') ORDER BY rolname;" 2>/dev/null || true)"
+                roles="$(docker exec -e PGPASSWORD="$POSTGRES_TEST_PASSWORD" "$postgres_id"                   psql -h 127.0.0.1 -U postgres -Atc "SELECT rolname || ':' || rolsuper FROM pg_roles WHERE rolname IN ('ingestion_app', 'consolidation_app') ORDER BY rolname;" 2>/dev/null || true)"
 
                 if echo "$databases" | grep -qx 'consolidation_db' &&
                    echo "$databases" | grep -qx 'ingestion_db' &&
@@ -131,18 +131,18 @@ jobs:
             exit 1
           fi
 
-          docker exec -e PGPASSWORD="$INGESTION_TEST_PASSWORD" "$postgres_id"             psql -U ingestion_app -d ingestion_db -Atc "SELECT current_user;" |
+          docker exec -e PGPASSWORD="$INGESTION_TEST_PASSWORD" "$postgres_id"             psql -h 127.0.0.1 -U ingestion_app -d ingestion_db -Atc "SELECT current_user;" |
             grep -qx 'ingestion_app'
 
-          docker exec -e PGPASSWORD="$CONSOLIDATION_TEST_PASSWORD" "$postgres_id"             psql -U consolidation_app -d consolidation_db -Atc "SELECT current_user;" |
+          docker exec -e PGPASSWORD="$CONSOLIDATION_TEST_PASSWORD" "$postgres_id"             psql -h 127.0.0.1 -U consolidation_app -d consolidation_db -Atc "SELECT current_user;" |
             grep -qx 'consolidation_app'
 
-          if docker exec -e PGPASSWORD="$INGESTION_TEST_PASSWORD" "$postgres_id"             psql -U ingestion_app -d consolidation_db -Atc "SELECT 1;" >/dev/null 2>&1; then
+          if docker exec -e PGPASSWORD="$INGESTION_TEST_PASSWORD" "$postgres_id"             psql -h 127.0.0.1 -U ingestion_app -d consolidation_db -Atc "SELECT 1;" >/dev/null 2>&1; then
             echo "ingestion_app unexpectedly connected to consolidation_db"
             exit 1
           fi
 
-          if docker exec -e PGPASSWORD="$CONSOLIDATION_TEST_PASSWORD" "$postgres_id"             psql -U consolidation_app -d ingestion_db -Atc "SELECT 1;" >/dev/null 2>&1; then
+          if docker exec -e PGPASSWORD="$CONSOLIDATION_TEST_PASSWORD" "$postgres_id"             psql -h 127.0.0.1 -U consolidation_app -d ingestion_db -Atc "SELECT 1;" >/dev/null 2>&1; then
             echo "consolidation_app unexpectedly connected to ingestion_db"
             exit 1
           fi
