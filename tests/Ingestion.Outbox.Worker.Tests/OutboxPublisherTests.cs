@@ -102,11 +102,92 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
 
         Assert.Equal(1, await CreateProcessor(database, publisher).ProcessBatchAsync(CancellationToken.None));
         Assert.Equal([good], publisher.Ids);
-        Assert.Null((await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == bad)).PublishedAt);
+        var invalid = await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == bad);
+        Assert.Null(invalid.PublishedAt);
+        Assert.NotNull(invalid.QuarantinedAt);
+        Assert.Equal("Unsupported event type", invalid.QuarantineReason);
         Assert.NotNull((await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == good)).PublishedAt);
     }
 
-    private async Task<Guid> SeedAsync(bool published = false, string eventType = nameof(ValueReceivedV1))
+    [Fact]
+    public async Task A_full_batch_of_poison_rows_is_quarantined_and_cannot_starve_later_valid_events()
+    {
+        var earlier = new DateTimeOffset(2026, 9, 18, 12, 0, 0, TimeSpan.Zero);
+        var poisonIds = new List<Guid>();
+        for (int i = 0; i < 10; i++)
+        {
+            poisonIds.Add(await SeedAsync(eventType: "Unknown.v1", occurredAt: earlier));
+        }
+
+        Guid validId = await SeedAsync();
+        var publisher = new RecordingPublisher();
+        await using var database = fixture.CreateContext();
+        var processor = CreateProcessor(database, publisher);
+
+        Assert.Equal(0, await processor.ProcessBatchAsync(CancellationToken.None));
+        Assert.Empty(publisher.Ids);
+        Assert.Equal(10, await database.OutboxMessages.AsNoTracking()
+            .CountAsync(x => poisonIds.Contains(x.Id) && x.QuarantinedAt != null && x.PublishedAt == null));
+
+        Assert.Equal(1, await processor.ProcessBatchAsync(CancellationToken.None));
+        Assert.Equal([validId], publisher.Ids);
+        Assert.NotNull((await database.OutboxMessages.AsNoTracking()
+            .SingleAsync(x => x.Id == validId)).PublishedAt);
+        Assert.Equal(0, await processor.ProcessBatchAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Malformed_json_and_mismatched_identity_are_quarantined_without_publishing()
+    {
+        var earlier = new DateTimeOffset(2026, 9, 18, 12, 0, 0, TimeSpan.Zero);
+        Guid malformed = await SeedAsync(payload: "{invalid json", occurredAt: earlier);
+        Guid wrongIdentity = await SeedAsync(payload: JsonSerializer.Serialize(
+            new ValueReceivedV1(Guid.NewGuid(), Guid.NewGuid(), 5m, earlier)), occurredAt: earlier);
+        Guid good = await SeedAsync();
+        var publisher = new RecordingPublisher();
+        await using var database = fixture.CreateContext();
+
+        Assert.Equal(1, await CreateProcessor(database, publisher).ProcessBatchAsync(CancellationToken.None));
+        Assert.Equal([good], publisher.Ids);
+        var malformedRow = await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == malformed);
+        var wrongRow = await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == wrongIdentity);
+        Assert.Null(malformedRow.PublishedAt);
+        Assert.Equal("Malformed JSON payload", malformedRow.QuarantineReason);
+        Assert.NotNull(malformedRow.QuarantinedAt);
+        Assert.Null(wrongRow.PublishedAt);
+        Assert.Equal("Invalid event identity", wrongRow.QuarantineReason);
+        Assert.NotNull(wrongRow.QuarantinedAt);
+    }
+
+    [Fact]
+    public async Task Publish_timeout_uses_injected_time_provider_and_keeps_message_retryable()
+    {
+        Guid id = await SeedAsync();
+        var clock = new ManualTimeProvider();
+        var publisher = new WaitingPublisher();
+        await using var database = fixture.CreateContext();
+        var processor = CreateProcessor(database, publisher, clock);
+        Task<int> result = processor.ProcessBatchAsync(CancellationToken.None);
+
+        await publisher.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(result.IsCompleted);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        Assert.Equal(0, await result.WaitAsync(TimeSpan.FromSeconds(10)));
+
+        var pending = await database.OutboxMessages.AsNoTracking().SingleAsync(x => x.Id == id);
+        Assert.Null(pending.PublishedAt);
+        Assert.Null(pending.QuarantinedAt);
+        Assert.Null(pending.QuarantineReason);
+
+        // The timeout is a transient failure, not a permanent poison message.
+        var retryPublisher = new RecordingPublisher();
+        Assert.Equal(1, await CreateProcessor(database, retryPublisher, clock)
+            .ProcessBatchAsync(CancellationToken.None));
+        Assert.Equal([id], retryPublisher.Ids);
+    }
+
+    private async Task<Guid> SeedAsync(bool published = false, string eventType = nameof(ValueReceivedV1),
+        string? payload = null, DateTimeOffset? occurredAt = null)
     {
         await using var database = fixture.CreateContext();
         var now = new DateTimeOffset(2026, 9, 19, 12, 0, 0, TimeSpan.Zero);
@@ -125,16 +206,17 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
             Id = message.EventId,
             ValueId = value.Id,
             EventType = eventType,
-            Payload = JsonSerializer.Serialize(message),
-            OccurredAt = now,
+            Payload = payload ?? JsonSerializer.Serialize(message),
+            OccurredAt = occurredAt ?? now,
             PublishedAt = published ? now : null
         });
         await database.SaveChangesAsync();
         return message.EventId;
     }
 
-    private static OutboxProcessor CreateProcessor(IngestionDbContext db, IOutboxMessagePublisher publisher) =>
-        new(db, publisher, TimeProvider.System, Options.Create(new OutboxOptions()),
+    private static OutboxProcessor CreateProcessor(IngestionDbContext db, IOutboxMessagePublisher publisher,
+        TimeProvider? clock = null) =>
+        new(db, publisher, clock ?? TimeProvider.System, Options.Create(new OutboxOptions()),
             NullLogger<OutboxProcessor>.Instance);
 
     private sealed class RecordingPublisher : IOutboxMessagePublisher
@@ -157,6 +239,94 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
             }
 
             _ids.Enqueue(message.EventId);
+        }
+    }
+    private sealed class WaitingPublisher : IOutboxMessagePublisher
+    {
+        public TaskCompletionSource<bool> Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task PublishAsync(ValueReceivedV1 message, string json, CancellationToken cancellationToken)
+        {
+            Started.TrySetResult(true);
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+    }
+
+    // Minimal fake clock: cancellation deadlines fire only when this provider is advanced.
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private readonly List<ManualTimer> _timers = [];
+        private DateTimeOffset _now = new(2026, 9, 19, 12, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ManualTimer(this, callback, state);
+            _timers.Add(timer);
+            timer.Change(dueTime, period);
+            return timer;
+        }
+
+        public void Advance(TimeSpan elapsed)
+        {
+            _now += elapsed;
+            foreach (var timer in _timers.ToArray())
+            {
+                timer.FireIfDue(_now);
+            }
+        }
+
+        private sealed class ManualTimer(ManualTimeProvider owner, TimerCallback callback, object? state) : ITimer
+        {
+            private readonly object _sync = new();
+            private DateTimeOffset? _due;
+            private bool _disposed;
+
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                lock (_sync)
+                {
+                    if (_disposed)
+                    {
+                        return false;
+                    }
+
+                    _due = dueTime == Timeout.InfiniteTimeSpan ? null : owner._now + dueTime;
+                    return true;
+                }
+            }
+
+            public void FireIfDue(DateTimeOffset now)
+            {
+                lock (_sync)
+                {
+                    if (_disposed || _due is null || _due > now)
+                    {
+                        return;
+                    }
+
+                    _due = null;
+                }
+
+                callback(state);
+            }
+
+            public void Dispose()
+            {
+                lock (_sync)
+                {
+                    _disposed = true;
+                    _due = null;
+                }
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
         }
     }
 }
