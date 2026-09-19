@@ -25,6 +25,11 @@ public sealed class IngestValueHandler(
         LoggerMessage.Define(LogLevel.Warning, new EventId(1002, "IdempotencyCacheWriteFailed"),
             "Idempotency cache write failed; committed PostgreSQL state is authoritative.");
 
+    private static readonly Action<ILogger, Guid, string, Exception?> DuplicateDetected =
+        LoggerMessage.Define<Guid, string>(LogLevel.Information,
+            new EventId(1003, "IdempotencyDuplicate"),
+            "Idempotency request {Result} for value {ValueId}; no new value or Outbox event committed.");
+
     private static readonly DistributedCacheEntryOptions CacheOptions = new()
     {
         AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
@@ -33,6 +38,7 @@ public sealed class IngestValueHandler(
     public async Task<IngestValueResult> HandleAsync(
         string idempotencyKey, decimal value, CancellationToken cancellationToken)
     {
+        using var activity = IngestionTelemetry.Traces.StartActivity("ingestion.accept_value", ActivityKind.Internal);
         // G29 normalizes decimal scale (e.g. 10.50 and 10.5) without JSON-specific formatting.
         string fingerprint = Sha256(value.ToString("G29", CultureInfo.InvariantCulture));
         string cacheKey = "ingestion:idempotency:v1:" + Sha256(idempotencyKey);
@@ -40,9 +46,9 @@ public sealed class IngestValueHandler(
         var cached = await ReadCacheAsync(cacheKey, cancellationToken);
         if (cached is not null)
         {
-            return cached.Fingerprint == fingerprint
+            return RecordExisting(cached.Id, cached.Fingerprint == fingerprint
                 ? new(IngestValueState.Replayed, new ValueReceipt(cached.Id, cached.Value))
-                : new(IngestValueState.Conflict, null);
+                : new(IngestValueState.Conflict, null));
         }
 
         var existing = await database.ReceivedValues.AsNoTracking()
@@ -50,7 +56,7 @@ public sealed class IngestValueHandler(
         if (existing is not null)
         {
             await WriteCacheAsync(cacheKey, existing, cancellationToken);
-            return FromExisting(existing, fingerprint);
+            return RecordExisting(existing.Id, FromExisting(existing, fingerprint));
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -94,12 +100,28 @@ public sealed class IngestValueHandler(
             var winner = await database.ReceivedValues.AsNoTracking()
                 .SingleAsync(x => x.IdempotencyKey == idempotencyKey, cancellationToken);
             await WriteCacheAsync(cacheKey, winner, cancellationToken);
-            return FromExisting(winner, fingerprint);
+            return RecordExisting(winner.Id, FromExisting(winner, fingerprint));
         }
+
+        // Report only after the durable value and Outbox commit. Cache is best-effort.
+        activity?.SetTag("value.id", received.Id.ToString("D"));
+        activity?.SetTag("message.id", eventId.ToString("D"));
+        activity?.SetTag("idempotency.status", "created");
+        IngestionTelemetry.AcceptedValues.Add(1);
 
         // A cache failure after commit must never change the successful HTTP result.
         await WriteCacheAsync(cacheKey, received, cancellationToken);
         return new(IngestValueState.Created, new ValueReceipt(received.Id, received.Value));
+    }
+
+    private IngestValueResult RecordExisting(Guid valueId, IngestValueResult result)
+    {
+        string status = result.State == IngestValueState.Replayed ? "replayed" : "conflict";
+        Activity.Current?.SetTag("value.id", valueId.ToString("D"));
+        Activity.Current?.SetTag("idempotency.status", status);
+        IngestionTelemetry.DuplicateRequests.Add(1, new KeyValuePair<string, object?>("result", status));
+        DuplicateDetected(logger, valueId, status, null);
+        return result;
     }
 
     private static IngestValueResult FromExisting(ReceivedValue existing, string fingerprint) =>
