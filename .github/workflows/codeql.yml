@@ -41,11 +41,11 @@ jobs:
           build-mode: manual
           queries: security-extended
 
-      - name: Restaurar dependências em locked mode
-        run: dotnet restore DotNetObservabilityLab.slnx --locked-mode
+      - name: Restaurar dependências
+        run: dotnet restore ./DotNetObservabilityLab.slnx
 
       - name: Compilar para análise
-        run: dotnet build DotNetObservabilityLab.slnx --configuration Release --no-restore
+        run: dotnet build ./DotNetObservabilityLab.slnx --configuration Release --no-restore
 
       - name: Executar análise CodeQL
         uses: github/codeql-action/analyze@4c0873ef8656cb3c50b3f42fb63bc1ade0cfa827 # v4
