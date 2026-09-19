@@ -19,10 +19,7 @@ internal sealed partial class ConsolidationConsumer(IConnection connection, ISer
             ValueReceivedV1? message;
             try
             {
-                message = JsonSerializer.Deserialize<ValueReceivedV1>(delivery.Body.Span);
-                if (message is null || message.EventId == Guid.Empty || message.ValueId == Guid.Empty ||
-                    !string.Equals(delivery.BasicProperties.MessageId, message.EventId.ToString("D"), StringComparison.OrdinalIgnoreCase))
-                    throw new JsonException("Invalid ValueReceived.v1 identity.");
+                message = DeserializeAndValidate(delivery.Body, delivery.BasicProperties.MessageId);
             }
             catch (JsonException ex)
             {
@@ -56,6 +53,27 @@ internal sealed partial class ConsolidationConsumer(IConnection connection, ISer
                 await channel.BasicCancelAsync(tag, noWait: false, cancellationToken: CancellationToken.None);
         }
     }
+    /// <summary>Validates the complete wire event before any Inbox write or acknowledgement.</summary>
+    internal static ValueReceivedV1 DeserializeAndValidate(ReadOnlyMemory<byte> body, string? amqpMessageId)
+    {
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("Value", out var valueField) ||
+            valueField.ValueKind != JsonValueKind.Number ||
+            !valueField.TryGetDecimal(out _) ||
+            !root.TryGetProperty("OccurredAt", out var occurredAtField) ||
+            occurredAtField.ValueKind != JsonValueKind.String)
+            throw new JsonException("ValueReceived.v1 requires a numeric Value and OccurredAt.");
+
+        var message = JsonSerializer.Deserialize<ValueReceivedV1>(body.Span);
+        if (message is null || message.EventId == Guid.Empty || message.ValueId == Guid.Empty ||
+            message.OccurredAt == default ||
+            !string.Equals(amqpMessageId, message.EventId.ToString("D"), StringComparison.OrdinalIgnoreCase))
+            throw new JsonException("Invalid ValueReceived.v1 identity or timestamp.");
+        return message;
+    }
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Consolidation consumer started.")]
     private static partial void Started(ILogger logger);
     [LoggerMessage(Level = LogLevel.Information, Message = "Consolidation message {MessageId} committed.")]

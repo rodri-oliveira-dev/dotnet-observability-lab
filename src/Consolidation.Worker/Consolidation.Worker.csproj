@@ -6,6 +6,9 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Consolidation.Worker.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../Contracts/Contracts.csproj" />
     <ProjectReference Include="../Consolidation.Persistence/Consolidation.Persistence.csproj" />
     <ProjectReference Include="../DotNetObservabilityLab.ServiceDefaults/DotNetObservabilityLab.ServiceDefaults.csproj" />

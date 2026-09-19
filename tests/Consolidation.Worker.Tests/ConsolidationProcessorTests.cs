@@ -56,4 +56,54 @@ public sealed class ConsolidationProcessorTests
         await using var verify = new ConsolidationDbContext(options);
         Assert.False(await verify.InboxMessages.AnyAsync(x => x.MessageId == message.MessageId));
     }
+
+    [Fact]
+    public void Missing_or_null_value_is_rejected_but_explicit_zero_is_valid()
+    {
+        var message = new ValueReceivedV1(Guid.NewGuid(), Guid.NewGuid(), 0m, DateTimeOffset.UtcNow);
+        var messageId = message.MessageId.ToString("D");
+        var missingValue = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            new { message.EventId, message.ValueId, message.OccurredAt });
+        Assert.Throws<System.Text.Json.JsonException>(() =>
+            ConsolidationConsumer.DeserializeAndValidate(missingValue, messageId));
+        var nullValue = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            new { message.EventId, message.ValueId, Value = (decimal?)null, message.OccurredAt });
+        Assert.Throws<System.Text.Json.JsonException>(() =>
+            ConsolidationConsumer.DeserializeAndValidate(nullValue, messageId));
+        var explicitZero = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(message);
+        Assert.Equal(0m, ConsolidationConsumer.DeserializeAndValidate(explicitZero, messageId).Value);
+    }
+
+    [Fact]
+    public async Task Last_updated_at_never_regresses_when_older_update_commits_last()
+    {
+        await using var postgres = new PostgreSqlBuilder().Build();
+        await postgres.StartAsync();
+        var options = new DbContextOptionsBuilder<ConsolidationDbContext>()
+            .UseNpgsql(postgres.GetConnectionString()).Options;
+        await using (var setup = new ConsolidationDbContext(options))
+            await setup.Database.MigrateAsync();
+        var later = new DateTimeOffset(2026, 9, 19, 16, 0, 0, TimeSpan.Zero);
+        var earlier = later.AddHours(-1);
+        await using (var first = new ConsolidationDbContext(options))
+        {
+            await new ConsolidationProcessor(first, new FixedTimeProvider(later)).ProcessAsync(
+                new ValueReceivedV1(Guid.NewGuid(), Guid.NewGuid(), 10m, later), CancellationToken.None);
+        }
+        await using (var second = new ConsolidationDbContext(options))
+        {
+            await new ConsolidationProcessor(second, new FixedTimeProvider(earlier)).ProcessAsync(
+                new ValueReceivedV1(Guid.NewGuid(), Guid.NewGuid(), 20m, earlier), CancellationToken.None);
+        }
+        await using var verify = new ConsolidationDbContext(options);
+        var total = await verify.ConsolidatedTotals.SingleAsync();
+        Assert.Equal(2, total.Count);
+        Assert.Equal(30m, total.Sum);
+        Assert.Equal(later, total.LastUpdatedAt);
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
 }

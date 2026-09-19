@@ -33,7 +33,7 @@ public sealed class ConsolidationProcessor(ConsolidationDbContext db, TimeProvid
             ON CONFLICT (id) DO UPDATE SET
                 count = consolidated_totals.count + 1,
                 sum = consolidated_totals.sum + EXCLUDED.sum,
-                last_updated_at = EXCLUDED.last_updated_at
+                last_updated_at = GREATEST(consolidated_totals.last_updated_at, EXCLUDED.last_updated_at)
             """, [message.Value, now], cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return ConsolidationResult.Applied;
