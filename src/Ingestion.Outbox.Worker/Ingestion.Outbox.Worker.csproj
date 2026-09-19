@@ -5,8 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../DotNetObservabilityLab.ServiceDefaults/DotNetObservabilityLab.ServiceDefaults.csproj" />
+    <ProjectReference Include="../Ingestion.Persistence/Ingestion.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

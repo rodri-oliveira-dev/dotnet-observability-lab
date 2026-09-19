@@ -12,13 +12,16 @@ The current baseline provides:
 - `Ingestion.Outbox.Worker`
 - `Consolidation.Api`
 - `Consolidation.Worker`
+- one Aspire-managed PostgreSQL server with `ingestion_db` and `consolidation_db`
+- distinct non-superuser PostgreSQL roles for the ingestion and consolidation boundaries
+- Redis as an auxiliary optimization resource
 - `DotNetObservabilityLab.AppHost`
 - `DotNetObservabilityLab.ServiceDefaults`
 - `Contracts`
 - ADR governance with ADR Guard
 - architecture-as-code with LikeC4
 
-PostgreSQL, Redis, RabbitMQ, Outbox/Inbox processing, and application-level telemetry are introduced by later roadmap issues.
+RabbitMQ, HTTP idempotency behavior, Outbox/Inbox processing, and application-level telemetry are introduced by later roadmap issues.
 
 ## Architecture style
 
@@ -31,6 +34,10 @@ Core boundary rules:
 - the two APIs never call each other;
 - `Consolidation.*` must not depend on `Ingestion.*`;
 - `Ingestion.*` must not depend on `Consolidation.*`;
+- `Ingestion.*` can access only `ingestion_db` using the `ingestion_app` role;
+- `Consolidation.*` can access only `consolidation_db` using the `consolidation_app` role;
+- the PostgreSQL administrator credential is reserved for local provisioning/health and is not injected into application processes;
+- Redis is an optimization, never the durable source of truth;
 - ServiceDefaults contains only cross-cutting Aspire defaults;
 - integration contracts belong in `Contracts`, not in either service's domain model.
 
@@ -41,7 +48,7 @@ Architecture documentation lives under [docs](docs/README.md). The LikeC4 model 
 - .NET 10 SDK (the repository pins `10.0.400` and rolls forward to the latest feature band)
 - Aspire CLI compatible with Aspire 13.5
 - Node.js 20+ for LikeC4 architecture tooling
-- an OCI-compatible container runtime will be required once infrastructure resources are added in later issues
+- an OCI-compatible container runtime for PostgreSQL and Redis
 
 ## Restore and build
 
@@ -67,7 +74,23 @@ Regenerate the deterministic ADR index after ADR changes:
 dotnet tool run adr-guard index docs/adr
 ```
 
-See [docs/architecture/README.md](docs/architecture/README.md) for the C4 levels, model conventions, and maintenance rules.
+See [docs/architecture/README.md](docs/architecture/README.md) for database ownership, C4 levels, migration commands, model conventions, and maintenance rules.
+
+## Local PostgreSQL secrets
+
+The persistent PostgreSQL volume requires stable credentials across AppHost runs. Store the three local passwords in the AppHost user-secrets store before the first run:
+
+```bash
+aspire secret set Parameters:postgres-password <postgres-admin-password> --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj
+aspire secret set Parameters:ingestion-db-password <ingestion-role-password> --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj
+aspire secret set Parameters:consolidation-db-password <consolidation-role-password> --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj
+```
+
+Do not commit these values. The AppHost has a `UserSecretsId`, so the secrets are stored outside the repository.
+
+If a disposable PostgreSQL data volume was created before these stable credentials and boundary roles were introduced, stop the AppHost and recreate that local volume once. Use `docker volume ls` (or the equivalent command for your container runtime) to identify the AppHost PostgreSQL data volume, then remove only that disposable development volume. Existing non-disposable data should be migrated instead of deleted.
+
+Changing any of these passwords later also requires updating the corresponding PostgreSQL role/password in the existing volume or recreating a disposable local volume.
 
 ## Run
 
@@ -77,14 +100,18 @@ Start the AppHost:
 aspire run --project ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj
 ```
 
-The Aspire Dashboard should show four application resources:
+The Aspire Dashboard should show:
 
 - `ingestion-api`
 - `ingestion-outbox-worker`
 - `consolidation-api`
 - `consolidation-worker`
+- `postgres`
+- `ingestion-db`
+- `consolidation-db`
+- `redis`
 
-Both APIs expose a minimal root endpoint and the Aspire development health endpoints.
+The applications receive only role-specific PostgreSQL connection strings for their owned database. Redis is referenced only by `Ingestion.Api` and `Consolidation.Worker`.
 
 ## Repository conventions
 
