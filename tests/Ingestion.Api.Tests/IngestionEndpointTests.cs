@@ -156,7 +156,7 @@ public sealed class IngestionEndpointTests(IngestionDatabaseFixture fixture)
         using var factory = fixture.CreateFactory();
         using var client = factory.CreateClient();
         string key = NewKey();
-        using var response = await PostAsync(client, key, 14m);
+        using var response = await PostAsync(client, key, 14m, origin.Id);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         await using var database = fixture.CreateContext();
@@ -295,13 +295,16 @@ public sealed class IngestionEndpointTests(IngestionDatabaseFixture fixture)
         }
     }
 
-    private static async Task<HttpResponseMessage> PostAsync(HttpClient client, string key, decimal? value)
+    private static async Task<HttpResponseMessage> PostAsync(HttpClient client, string key, decimal? value,
+        string? traceParent = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/values")
         {
             Content = JsonContent.Create(new { value })
         };
         request.Headers.Add("Idempotency-Key", key);
+        if (traceParent is not null)
+            request.Headers.TryAddWithoutValidation("traceparent", traceParent);
         return await client.SendAsync(request);
     }
 
