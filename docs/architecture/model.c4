@@ -73,7 +73,7 @@ model {
     consolidationWorker = container "Consolidation.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Dedicated read-side background process. Uses consolidation_db through consolidation_app, declares RabbitMQ topology, and receives Redis only for the later duplicate-message fast path. Actual consumption/Inbox behavior comes later."
+      description "Independent RabbitMQ consumer. Atomically persists Inbox and consolidated total to consolidation_db; Redis is not required for correctness."
       rabbitConsumer = component "RabbitMQ consumer adapter" {
         description "Validates event and AMQP identity, acknowledges only after commit and rejects malformed messages."
       }
@@ -100,7 +100,7 @@ model {
     rabbitmq = container "RabbitMQ" {
       #broker
       technology "RabbitMQ / AMQP 0-9-1"
-      description "Aspire-managed broker with management UI and persistent storage. Both workers declare the durable direct lab.events.v1 exchange and durable consolidation.value-received.v1 queue bound by value.received.v1. The ingestion Outbox worker already polls and publishes confirmed events; the consolidation consumer/Inbox is planned for a later issue."
+      description "Aspire-managed broker with management UI and persistent storage. Both workers declare the durable direct lab.events.v1 exchange and durable consolidation.value-received.v1 queue bound by value.received.v1. The ingestion Outbox worker publishes confirmed events and the consolidation worker commits the Inbox and read model before acknowledgement."
     }
   }
 
