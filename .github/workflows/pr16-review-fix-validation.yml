@@ -92,7 +92,7 @@ jobs:
           postgres_id=""
           ready=false
 
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 15); do
             if ! kill -0 "$apphost_pid" 2>/dev/null; then
               cat apphost.log
               docker ps -a
