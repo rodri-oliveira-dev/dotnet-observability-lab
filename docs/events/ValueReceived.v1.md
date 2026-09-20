@@ -16,8 +16,8 @@ and ISO-8601 timestamp representation. Existing v1 Outbox rows remain readable.
 
 | JSON property | Type | Meaning |
 | --- | --- | --- |
-| `EventId` | GUID | Stable, nonempty Outbox event identity; remains in v1 JSON for compatibility. |
-| `ValueId` | GUID | Logical operation/value ID; business deduplication identity. |
+| `EventId` | GUID | Stable, nonempty Outbox event identity and durable Inbox deduplication key (`MessageId`); remains in v1 JSON for compatibility. |
+| `ValueId` | GUID | Identifier of the logical value; not used as the Inbox deduplication key. |
 | `Value` | JSON decimal number | Received numeric value, with no currency implied. |
 | `OccurredAt` | ISO-8601 timestamp with offset | Time the value and Outbox entry were committed. |
 | `CorrelationId` | Optional string | Caller/operation correlation only when already available; omitted when absent. |

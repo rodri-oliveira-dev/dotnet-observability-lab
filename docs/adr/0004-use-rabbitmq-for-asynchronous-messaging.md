@@ -37,7 +37,7 @@ The independent Outbox publisher maps this value to the AMQP message ID.
 
 Delivery is **at-least-once**, not exactly-once. A publisher can retry after
 uncertain broker confirmation and RabbitMQ can redeliver a message before an
-acknowledgement. The consolidation consumer atomically persists the
+acknowledgement. The future consolidation consumer must atomically persist the
 Inbox message identity and its read-model update in `consolidation_db`; neither
 RabbitMQ acknowledgement nor Redis deduplication alone establishes correctness.
 No ordering guarantee is assumed beyond what a later consumer explicitly defines.
@@ -59,7 +59,7 @@ and next eligible retry time are persisted with bounded exponential backoff. The
 publisher skips not-yet-eligible rows so retries cannot starve later events.
 The publish timeout and retry schedule are controlled by the injected TimeProvider
 to support deterministic tests.
-The consolidation consumer validates event/AMQP identity, inserts Inbox identity and updates the aggregate in one PostgreSQL transaction, then manually acknowledges the delivery. Malformed messages are rejected without requeue; transient database failures are requeued.
+Consuming, acknowledgements and Inbox processing remain for later issues.
 
 ## Alternatives considered
 
@@ -77,7 +77,7 @@ The consolidation consumer validates event/AMQP identity, inserts Inbox identity
 - The durable broker queue buffers messages while the consumer is unavailable,
   subject to the broker's storage and operational limits.
 - Broker availability affects the workers, not the two HTTP APIs.
-- Duplicate messages are part of the contract. The implemented consumer uses a
+- Duplicate messages are part of the contract. The later consumer must use a
   durable Inbox and explicitly control acknowledgement timing.
 - Durable exchange/queue declarations alone do not make individual messages
   persistent: the publisher uses persistent delivery, mandatory routing and

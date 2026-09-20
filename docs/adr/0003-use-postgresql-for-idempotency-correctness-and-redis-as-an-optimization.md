@@ -21,7 +21,7 @@ PostgreSQL already provides durable transactions and unique constraints and is r
 
 Use **PostgreSQL as the authoritative idempotency guarantee** and **Redis only as an optional fast path/optimization**.
 
-The ownership is:
+The planned ownership is:
 
 - `Ingestion.Api` may use Redis to short-circuit known repeated HTTP idempotency keys, while `ingestion_db` remains authoritative;
 - `Consolidation.Worker` may use Redis to short-circuit known duplicate message identifiers, while the persistent Inbox in `consolidation_db` remains authoritative.
@@ -30,7 +30,7 @@ Redis loss, eviction, or temporary unavailability must never allow a duplicate o
 
 No correctness-sensitive transaction spans PostgreSQL and Redis.
 
-Redis is provisioned by Aspire. HTTP idempotency uses Redis as a best-effort cache of committed receipts; the consolidation consumer intentionally uses PostgreSQL Inbox only.
+Redis is introduced as an Aspire resource in this issue so the intended topology is explicit, but the actual HTTP idempotency and consumer deduplication behavior is implemented by later issues.
 
 The applications that do not participate in those fast paths do not receive a Redis reference.
 
@@ -69,7 +69,7 @@ event in the same PostgreSQL transaction.
   pending Outbox message; the independent worker claims pending rows with
   PostgreSQL row locks and commits PublishedAt only after broker confirmation.
   A crash after broker confirmation but before database commit may duplicate
-  publication, so the consolidation consumer uses a durable Inbox.
+  publication, so the future consumer must use a durable Inbox.
 
 The ingestion API alone applies its schema migrations at startup; its worker shares the
 persistence model but does not execute migrations. The consolidation boundary remains
