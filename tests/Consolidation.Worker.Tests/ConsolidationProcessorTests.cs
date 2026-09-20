@@ -251,6 +251,8 @@ public sealed class ConsolidationProcessorTests
         Assert.Equal(producer.TraceId, ConsolidationConsumer.ExtractParent(headers).TraceId);
         headers["traceparent"] = Encoding.UTF8.GetBytes(producer.Id!).AsMemory();
         Assert.Equal(producer.TraceId, ConsolidationConsumer.ExtractParent(headers).TraceId);
+        headers["traceparent"] = (ReadOnlyMemory<byte>)Encoding.UTF8.GetBytes(producer.Id!);
+        Assert.Equal(producer.TraceId, ConsolidationConsumer.ExtractParent(headers).TraceId);
 
         headers["tracestate"] = new string('x', 513);
         Assert.Equal(producer.TraceId, ConsolidationConsumer.ExtractParent(headers).TraceId);
