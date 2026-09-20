@@ -6,9 +6,9 @@ Accepted
 
 ## Context
 
-The lab consists of multiple independently executable .NET processes and will progressively add PostgreSQL, Redis, and RabbitMQ. The local development experience needs one explicit place to compose these resources, wire service dependencies, expose health information, and inspect the running topology.
+The lab consists of multiple independently executable .NET processes. When this decision was recorded, PostgreSQL, Redis, and RabbitMQ were planned as incremental additions; all three are now provisioned in the local AppHost. The local development experience needs one explicit place to compose these resources, wire service dependencies, expose health information, and inspect the running topology.
 
-The project also needs a local observability surface that makes it easy to inspect distributed behavior while the later OpenTelemetry scenarios are developed.
+The project also needs a local observability surface for inspecting distributed behavior across the OpenTelemetry scenarios.
 
 Using ad hoc startup scripts or a hand-maintained local composition file for every .NET process would duplicate configuration and make resource relationships harder to understand.
 
@@ -18,11 +18,11 @@ At the same time, the observability design must remain portable. The project mus
 
 Use **.NET Aspire** as the local application composition and developer-experience layer.
 
-The Aspire AppHost is the local composition root for the executable applications and, in later issues, their infrastructure dependencies. ServiceDefaults provides shared development-time defaults such as health checks, service discovery, resilience defaults, and the baseline OpenTelemetry wiring.
+The Aspire AppHost is the local composition root for the four executable applications, PostgreSQL (two logical databases), Redis and RabbitMQ. ServiceDefaults provides shared development-time defaults such as health checks, service discovery, resilience defaults, and the baseline OpenTelemetry wiring.
 
 Use the **Aspire Dashboard** as the local surface for inspecting resources and telemetry during development.
 
-Aspire is **not** the observability standard of this repository. **OpenTelemetry remains the instrumentation, context-propagation, and telemetry standard**, and its adoption is documented separately when the end-to-end observability work is introduced.
+Aspire is **not** the observability standard of this repository. **OpenTelemetry remains the instrumentation, context-propagation, and telemetry standard**, and its end-to-end adoption is documented separately in ADR 0005.
 
 Aspire must not become part of the business message path, and domain/application code must not depend on Aspire APIs.
 
@@ -34,8 +34,8 @@ Positive consequences:
 
 - the four .NET processes have one explicit local composition root;
 - resource wiring and health visibility are centralized in the AppHost;
-- infrastructure resources can be introduced incrementally without scattering local startup configuration;
-- the Aspire Dashboard provides an immediate local view of resources and, later, OpenTelemetry data;
+- infrastructure resources were introduced incrementally without scattering local startup configuration;
+- the Aspire Dashboard provides a local view of resources and OpenTelemetry data;
 - application telemetry remains portable because OpenTelemetry is kept as the standard beneath the dashboard.
 
 Trade-offs and constraints:
