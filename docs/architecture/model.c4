@@ -1,6 +1,4 @@
-// Current and planned architecture for dotnet-observability-lab.
-// Elements tagged as #future are intentional placeholders required by the roadmap
-// and must not be read as already implemented runtime dependencies.
+// Implemented architecture for dotnet-observability-lab; dynamic flow lives in views.c4.
 
 specification {
   tag api
@@ -100,7 +98,7 @@ model {
     redis = container "Redis" {
       #cache
       technology "Redis"
-      description "Disposable optimization resource for HTTP idempotency. Consolidation has an Aspire reference but no Redis lookup; PostgreSQL remains authoritative."
+      description "Disposable optimization resource for HTTP idempotency. Consolidation has a provisioned Aspire reference but performs no Redis lookup; PostgreSQL remains authoritative."
     }
 
     rabbitmq = container "RabbitMQ" {

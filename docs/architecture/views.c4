@@ -108,6 +108,27 @@ views {
     autoLayout LeftRight
   }
 
+  // Runtime steps are distinct from the static dependency graph and are intentionally
+  // not additional model-level relationships. Read requests start a new HTTP trace.
+  dynamic view valueWriteFlow {
+    title "ValueReceived.v1 - accepted write to independent consolidated read"
+    description "One successful request, durable Outbox handoff and separate read request. Aspire receives OTLP telemetry only; it is not a business hop."
+    apiClient -> lab.ingestionApi "POST /values (new Idempotency-Key)"
+    lab.ingestionApi -> lab.redis "Best-effort receipt cache lookup"
+    lab.ingestionApi -> lab.postgresql "Commit value + Outbox in ingestion_db"
+    lab.ingestionApi -> apiClient "HTTP 201 + value receipt"
+    lab.ingestionOutboxWorker -> lab.postgresql "Claim pending Outbox (ingestion_db)"
+    lab.ingestionOutboxWorker -> lab.rabbitmq "Confirm persistent ValueReceived.v1 publish"
+    lab.ingestionOutboxWorker -> lab.postgresql "Mark Outbox published after broker confirmation"
+    lab.rabbitmq -> lab.consolidationWorker "Deliver event (at least once)"
+    lab.consolidationWorker -> lab.postgresql "Commit Inbox + total in consolidation_db"
+    lab.consolidationWorker -> lab.rabbitmq "Acknowledge only after durable commit"
+    apiClient -> lab.consolidationApi "GET /consolidated (separate HTTP request)"
+    lab.consolidationApi -> lab.postgresql "Read latest total from consolidation_db"
+    lab.consolidationApi -> apiClient "HTTP 200 + durable snapshot"
+    autoLayout LeftRight
+  }
+
   view containers of lab {
     title "C4 Level 2 - Containers"
     description "Shows independent APIs, PostgreSQL, Redis and RabbitMQ business relationships; separate OTLP export edges end at the local Aspire Dashboard, which does not route business traffic."

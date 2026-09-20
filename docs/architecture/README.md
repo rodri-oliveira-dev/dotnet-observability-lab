@@ -16,7 +16,7 @@ The two persistence projects are boundary-internal implementation libraries shar
 
 ## C4 levels
 
-The repository uses three C4 levels.
+The repository uses three C4 levels **and a LikeC4 dynamic write/read flow** (`valueWriteFlow`).
 
 ### Level 1 — System Context
 
@@ -90,6 +90,10 @@ Answers:
 The ingestionComponents view now shows the implemented HTTP endpoint, idempotent ingestion use case, and transactional EF Core persistence boundary. The outboxPublisherComponents view models the dedicated poller, the confirmed RabbitMQ adapter and their infrastructure boundaries. The consolidationComponents view models the active RabbitMQ consumer, transactional Inbox processor and PostgreSQL store. The consolidationApiComponents view shows the independent HTTP read endpoint and the read-only database query, with no synchronous dependency on Ingestion.Api or RabbitMQ.
 
 Do not create a component for every class. A component should represent a meaningful responsibility, boundary, port, adapter, hosted service, or processing stage.
+
+### Dynamic write/read flow
+
+The [LikeC4 dynamic view](views.c4) `valueWriteFlow` orders one successful POST, its durable Outbox handoff, the broker-confirmed event, the transactional Inbox update, and a later **separate** GET. It models one scenario, not additional static dependencies or a promise of a single atomic distributed transaction. The AppHost/Dashboard receives OTLP export from the processes, but is not a hop in the business flow. Follow [the hands-on scenarios](../scenarios.md) to compare this intended path with real sampled traces, structured logs, and meters. A GET is a new HTTP trace; delays, failed attempts and duplicate deliveries can add runtime spans that are not steps in the nominal dynamic view.
 
 ## Database ownership
 
@@ -191,8 +195,7 @@ operational decision visibility to those existing process boundaries. They do
 not introduce a separately deployed observability component or alter
 business-message relationships in LikeC4. The meter names are explicitly
 registered in ServiceDefaults, and metric dimensions exclude all per-request
-identifiers. See the README's application observability runbook for the exact
-metric contracts and duplicate/retry demonstrations.
+identifiers. See [the observability/scenario runbook](../scenarios.md) for the metric contracts and duplicate/retry demonstrations.
 
 The C4 Container view shows four explicit **OTLP telemetry export** edges
 from the processes to the Aspire Dashboard; those edges are not API calls or
@@ -202,7 +205,7 @@ compatible collector when running outside the local development environment.
 ## Files
 
 - `model.c4` — element definitions, ownership, descriptions, and relationships.
-- `views.c4` — C4 views and the small shared visual convention.
+- `views.c4` — C4 views, the dynamic write/read view and the small shared visual convention.
 
 Keep model facts in `model.c4`; avoid duplicating the same relationship merely to make a view look better.
 
@@ -289,6 +292,6 @@ Do not create ADRs for routine implementation details merely because they are ne
 - **ADRs** record architectural decisions and their reasoning.
 - **LikeC4** shows the resulting current/planned architecture.
 - **README** provides operational entry points and navigation.
-- Later runbooks/scenario documentation explains how to execute and troubleshoot the system.
+- [Scenario runbook](../scenarios.md) explains how to execute and troubleshoot the system.
 
 An ADR is historical decision context; LikeC4 is the architecture model that should remain synchronized with the implementation.

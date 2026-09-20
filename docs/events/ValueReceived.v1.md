@@ -4,7 +4,7 @@
 
 Represents a value durably accepted by `Ingestion.Api`. The API writes the v1
 JSON payload and its Outbox row together in `ingestion_db`; a later
-`Ingestion.Outbox.Worker` publishes the event. The future
+`Ingestion.Outbox.Worker` publishes the event. The independent
 `Consolidation.Worker` consumes it and updates only `consolidation_db`.
 The two HTTP APIs neither call one another nor interact directly with RabbitMQ.
 
@@ -47,23 +47,23 @@ following values. They must not be added to the logical JSON payload:
 | `event_type` / AMQP `Type` | `ValueReceived.v1` |
 | AMQP `MessageId` | `EventId` from the persisted Outbox event (GUID string) |
 | AMQP `CorrelationId` | Optional logical correlation identifier when present |
-| W3C `traceparent` and `tracestate` headers | Optional tracing context supplied by the future publisher; not business fields |
+| W3C `traceparent` and `tracestate` headers | Optional tracing context emitted by the Outbox publisher; not business fields |
 | Exchange | `lab.events.v1` (durable direct) |
 | Queue | `consolidation.value-received.v1` (durable, non-exclusive, non-auto-delete) |
 | Routing key | `value.received.v1` |
 
 The current Outbox `event_type` column is `ValueReceivedV1` for the existing
-v1 persistence flow. The future publisher must map that persisted name to the
-versioned AMQP `Type`; do not silently rewrite existing Outbox data.
+v1 persistence flow. The Outbox publisher maps that persisted name to the versioned AMQP `Type`;
+do not silently rewrite existing Outbox data.
 
 ## Delivery and compatibility
 
-The intended path is **at-least-once**. RabbitMQ may redeliver and the
-publisher may retry. The future consumer must use a unique durable Inbox key
+The implemented path is **at-least-once**. RabbitMQ may redeliver and the
+publisher may retry. The consolidation consumer uses a unique durable Inbox key
 (`MessageId` / `EventId`) in its own PostgreSQL transaction with the
 consolidated-state update; duplicate delivery is expected, and Redis is only
 an optimization. Acknowledgements must follow durable commit.
 
-A future breaking payload change requires a new explicit event version and
+A breaking payload change requires a new explicit event version and
 a consumer migration plan. Additive optional fields must remain tolerable to
-older consumers. No event publishing or consuming is implemented by issue #5.
+older consumers. The Outbox worker publishes persistent mandatory messages with publisher confirmations. The consolidation consumer validates payload and AMQP MessageId, commits Inbox and read model atomically, and acknowledges only after commit. Malformed payloads are rejected without requeue; no dead-letter queue is configured.
