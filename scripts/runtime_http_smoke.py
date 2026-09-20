@@ -126,6 +126,8 @@ def main(argv=None):
     }
     exit_code = 1
     try:
+        evidence["happy_http"] = "INCOMPLETE"
+        evidence["duplicate_http"] = "INCOMPLETE"
         observations = run(args.ingestion_url, args.consolidation_url,
                            args.timeout, args.interval)
         evidence["observations"] = observations
