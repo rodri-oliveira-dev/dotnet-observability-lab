@@ -389,10 +389,15 @@ def main(argv=None):
                 guided(args, record)
             record["result"] = "PARTIAL_EVIDENCE"
         except (AssertionError, OSError, ValueError, RuntimeError, KeyError, TypeError,
-                subprocess.TimeoutExpired) as error:
+                EOFError, KeyboardInterrupt, subprocess.TimeoutExpired) as error:
             record["result"] = "FAIL_OR_BLOCKED"
             record["error_type"] = type(error).__name__
-            record["error"] = str(error) if isinstance(error, AssertionError) else "Probe failed (details redacted)"
+            record["error"] = str(error) if isinstance(error, AssertionError) else "Probe failed or was interrupted (details redacted)"
+            if args.scenario == 6:
+                record["limitations"].append(
+                    "MANDATORY CLEANUP: check for an open row-lock transaction and run "
+                    "scripts/demo/disable-consolidation-failure.sql against disposable "
+                    "consolidation_db before restarting the next scenario.")
         finally:
             record["finished_utc"] = utc()
             # Exclusive creation prevents overwriting prior evidence.
