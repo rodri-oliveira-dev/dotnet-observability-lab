@@ -1,11 +1,13 @@
-# Live Aspire verification record — issue #32
+# Live Aspire verification record — follow-up issue #40
 
 **Status: NOT VERIFIED.** This is an execution checklist and evidence location, **not**
 a claim that any of the six scenarios has passed. A green CI run and the HTTP-only
 smoke harness are not evidence of an Aspire Dashboard trace, a RabbitMQ replay,
-or PostgreSQL transaction behavior. Keep issue #32 and the runtime checkbox in
-[roadmap #13](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/issues/13)
-open until every scenario below has actual recorded results.
+or PostgreSQL transaction behavior. [Issue #32](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/issues/32)
+was closed **administratively without runtime acceptance**; [follow-up issue #40](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/issues/40)
+tracks the still-unexecuted six-scenario verification. [Roadmap #13](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/issues/13)
+may be closed for delivered implementation/documentation, but this runtime verification
+must remain explicitly **pending** until actual evidence exists.
 
 ## Attempt and environment
 
@@ -102,10 +104,15 @@ mark the scenario complete if the lock or constraint remains in place.
 
 ## Handoff and acceptance
 
-Issue #33 owns a Portuguese README, its top-of-page language selector and
-badges; issue #34 owns rendered/navigable LikeC4 views. Neither was available
-in `main` at this attempt, so no bilingual startup or rendered-diagram
-navigation was verified. Once the two landing pages exist, link this report
-from both with its **pending** status; only describe verified results after
-they have been recorded. The GitHub PR for this harness should not use
-`Closes #32` while all six runtime verifications remain unexecuted.
+The English and Brazilian Portuguese READMEs (merged via [PR #38](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/pull/38))
+and the GitHub-rendered LikeC4 gallery (merged via [PR #39](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/pull/39))
+are now present in `main`. **Neither was available at the recorded attempt above**;
+their presence does not retroactively establish a live startup or Dashboard verification.
+Both READMEs link to this report with its **pending** status.
+
+Use [follow-up #40](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/issues/40)
+for execution results and evidence links. Only change `NOT VERIFIED` after all six
+scenarios have actual, redacted observations. The administrative closures of
+[original issue #32](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/issues/32)
+and [implementation/documentation roadmap #13](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/issues/13)
+do **not** signify runtime acceptance.
