@@ -1,5 +1,7 @@
 # Contributing
 
+Choose the [English README](README.md) or the [README em Português (Brasil)](README.pt-BR.md) for the same architecture overview, local startup commands and testing prerequisites. Keep both README versions in sync when onboarding or architecture references change.
+
 Keep changes small, reproducible, and proportional to this lab's purpose.
 
 ## Environment
