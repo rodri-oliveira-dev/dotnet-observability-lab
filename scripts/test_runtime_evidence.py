@@ -57,7 +57,7 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
                 "INGESTION_API_URL": "http://localhost:5010",
                 "CONSOLIDATION_API_URL": "http://localhost:5020",
             }
-            with patch.dict("os.environ", env, clear=True), \\
+            with patch.dict("os.environ", env, clear=True), \
                     patch.object(runner, "scenario1") as scenario:
                 exit_code = runner.main(["--scenario", "1", "--output", str(output)])
             scenario.assert_called_once()
@@ -76,7 +76,7 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp:
             output = pathlib.Path(temp) / "evidence.json"
-            with patch.dict("os.environ", {"ASPIRE_DISPOSABLE_LAB": "I_UNDERSTAND"}, clear=True), \\
+            with patch.dict("os.environ", {"ASPIRE_DISPOSABLE_LAB": "I_UNDERSTAND"}, clear=True), \
                     patch.object(runner, "scenario2") as scenario:
                 exit_code = runner.main([
                     "--scenario", "2", "--ingestion-url", "http://127.0.0.1:6010",
@@ -94,7 +94,7 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp:
             output = pathlib.Path(temp) / "evidence.json"
-            with patch.dict("os.environ", {"ASPIRE_DISPOSABLE_LAB": "I_UNDERSTAND"}, clear=True), \\
+            with patch.dict("os.environ", {"ASPIRE_DISPOSABLE_LAB": "I_UNDERSTAND"}, clear=True), \
                     patch.object(runner, "scenario1", side_effect=AttributeError("sensitive detail")):
                 exit_code = runner.main([
                     "--scenario", "1", "--ingestion-url", "http://localhost:5010",
@@ -113,8 +113,8 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
         output = StringIO()
         with patch.object(runner.sys, "stderr", output), patch("builtins.input", return_value=""):
             runner.operator_checkpoint("Observe the local resources.")
-        self.assertTrue(output.getvalue().startswith("\\nOPERATOR ACTION"))
-        self.assertNotIn("\\\\nOPERATOR ACTION", output.getvalue())
+        self.assertTrue(output.getvalue().startswith("\nOPERATOR ACTION"))
+        self.assertNotIn("\\nOPERATOR ACTION", output.getvalue())
 
     def test_replay_must_keep_original_message_id(self):
         import json
