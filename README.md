@@ -4,9 +4,9 @@ A small, runnable **.NET 10 / Aspire / OpenTelemetry** reference for observing r
 
 ## Architecture at a glance
 
-A arquitetura é mantida exclusivamente nos [diagramas LikeC4 de contexto, contêineres e componentes e na visão dinâmica do fluxo](docs/architecture/README.md); o README resume as responsabilidades sem reproduzir um diagrama manual.
+The [LikeC4 context, container, component and dynamic-flow views](docs/architecture/README.md) are the architecture source of truth; this README summarizes responsibilities rather than maintaining a competing diagram.
 
-The two APIs **never call each other**. A single local PostgreSQL resource hosts two separate logical databases (`ingestion_db` and `consolidation_db`), each with its own non-superuser owner/credentials. Redis accelerates ingestion idempotency but never establishes correctness; only the two workers connect to RabbitMQ. Aspire starts local processes/resources and displays OpenTelemetry data; it does **not** route business traffic. See [C4 Levels 1–3 and the dynamic flow](docs/architecture/README.md), the [event contract](docs/events/ValueReceived.v1.md), and [architectural decisions](docs/adr/README.md).
+The two APIs **never call each other**. A single local PostgreSQL resource hosts two separate logical databases (`ingestion_db` and `consolidation_db`), each with its own non-superuser owner/credentials. Redis is an optional, best-effort HTTP idempotency shortcut in `Ingestion.Api`; PostgreSQL remains authoritative for both HTTP idempotency and consumer deduplication. Although Aspire provisions a Redis reference for `Consolidation.Worker`, the worker makes no Redis lookup: it atomically records the Inbox message ID and updates the aggregate in `consolidation_db`. Only the two workers connect to RabbitMQ. Aspire starts local processes/resources and displays OpenTelemetry data; it does **not** route business traffic. See [C4 Levels 1–3 and the dynamic flow](docs/architecture/README.md), the [event contract](docs/events/ValueReceived.v1.md), and [architectural decisions](docs/adr/README.md).
 
 ## Prerequisites and start
 
