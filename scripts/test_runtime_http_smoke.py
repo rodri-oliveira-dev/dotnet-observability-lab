@@ -1,5 +1,8 @@
 """Pure-stdlib tests for the opt-in HTTP smoke harness; no Aspire claims."""
+import contextlib
+import io
 import json
+import urllib.error
 import unittest
 import urllib.request
 from decimal import Decimal
@@ -61,6 +64,67 @@ class HttpSmokeTests(unittest.TestCase):
         self.assertEqual(sent.data, b'{"value":5.00}')
         self.assertEqual(json.loads(sent.data)["value"], 5.0)
         self.assertEqual(sent.headers["Idempotency-key"], "key")
+
+    def test_non_json_http_error_retains_status_and_safe_excerpt(self):
+        raw = b"<html><body>503 Service Unavailable token=TOPSECRET123</body></html>"
+        http_error = urllib.error.HTTPError(
+            "http://localhost/values", 503, "Service Unavailable", {}, io.BytesIO(raw))
+        with patch.object(urllib.request, "urlopen", side_effect=http_error):
+            status, body = smoke.exchange("http://localhost", "POST", "/values", "5", "key")
+        self.assertEqual(status, 503)
+        self.assertEqual(body["response_excerpt"], "Service Unavailable")
+        self.assertTrue(body["non_json_http_error"])
+        self.assertNotIn("TOPSECRET123", json.dumps(body))
+
+    def test_unknown_error_body_is_redacted_without_echoing_secrets(self):
+        self.assertEqual(
+            smoke.sanitized_error_excerpt(b"<html>credential=my-private-value</html>"),
+            "[response body redacted]",
+        )
+
+    def test_valid_json_http_error_is_unchanged(self):
+        payload = b'{"title":"Idempotency key conflict"}'
+        http_error = urllib.error.HTTPError(
+            "http://localhost/values", 409, "Conflict", {}, io.BytesIO(payload))
+        with patch.object(urllib.request, "urlopen", side_effect=http_error):
+            status, body = smoke.exchange("http://localhost", "POST", "/values", "6", "key")
+        self.assertEqual(status, 409)
+        self.assertEqual(body, {"title": "Idempotency key conflict"})
+
+    def test_non_json_http_error_reaches_main_evidence_without_secret(self):
+        class OkResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self):
+                return b'{"count":0,"sum":0}'
+
+        def respond(request, timeout):
+            if request.get_method() == "GET":
+                return OkResponse()
+            raise urllib.error.HTTPError(
+                request.full_url, 502, "Bad Gateway", {},
+                io.BytesIO(b"<html>Bad Gateway: token=DO_NOT_REPORT_ME</html>"))
+
+        stdout = io.StringIO()
+        with (patch.object(urllib.request, "urlopen", side_effect=respond),
+              patch.object(smoke, "git_sha", return_value="example-commit"),
+              contextlib.redirect_stdout(stdout)):
+            exit_code = smoke.main([
+                "--ingestion-url", "http://ingestion",
+                "--consolidation-url", "http://consolidation",
+            ])
+        evidence = json.loads(stdout.getvalue())
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(evidence["happy_http"], "INCOMPLETE")
+        self.assertIn("HTTP 502", evidence["error"])
+        self.assertIn("Bad Gateway", evidence["error"])
+        self.assertNotIn("DO_NOT_REPORT_ME", stdout.getvalue())
 
     def test_poll_timeout_is_not_misreported_as_success(self):
         with patch.object(smoke, "snapshot", return_value={"count": 0, "sum": "0"}):
