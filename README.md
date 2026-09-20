@@ -43,6 +43,8 @@ A new key returns **201** with `id` and `value`; the same key and numeric value 
 
 The [hands-on scenario runbook](docs/scenarios.md) provides commands, expected database state and **Aspire Traces / Structured Logs / Metrics** signals for six demonstrations: successful end-to-end processing, duplicate HTTP requests, duplicate AMQP delivery, Ingestion.Api downtime, temporary RabbitMQ outage/recovery, and slow/error consolidation. It includes reversible **development-only SQL fault injection** rather than toggles in production application code. Use the [dynamic LikeC4 view](docs/architecture/views.c4) to understand the nominal order; an actual distributed write trace follows the persisted W3C context across the Outbox, whereas a later GET begins a separate trace.
 
+The [live runtime verification report](docs/runtime-verification.md) distinguishes executed evidence from the scenario procedures and CI tests; its six-scenario status is **pending** until the Aspire Dashboard, message replay, outages and database checks have actually been inspected. The optional [HTTP smoke harness](scripts/runtime_http_smoke.py) verifies only the first two scenarios' HTTP/read-model observations against a running disposable environment.
+
 ## Build, tests and quality gates
 
 ```bash

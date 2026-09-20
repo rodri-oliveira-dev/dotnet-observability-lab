@@ -2,6 +2,10 @@
 
 This runbook exercises the **implemented** four-process lab against a disposable Aspire development environment; never run the fault-injection SQL or event replays against production data. The [static C4 views and dynamic happy-path view](architecture/README.md) describe responsibilities and the intended order; the **Traces** tab in Aspire shows sampled *actual executions* (including asynchronous retries and failures), not a rendering of the LikeC4 diagram. A subsequent GET starts a separate trace. Aspire receives OTLP telemetry but carries no business traffic.
 
+## Verification evidence and optional automation
+
+The [live verification report](runtime-verification.md) records the current execution blocker and provides an evidence checklist for all six scenarios. **The scenarios below are procedures and expected signals, not evidence of a successful live Aspire run.** After starting a disposable environment, `python3 scripts/runtime_http_smoke.py --output /tmp/lab-http-evidence.json` can check HTTP statuses, receipt identity and asynchronous read-model count/sum deltas for the first two scenarios. It does not check database rows, RabbitMQ message metadata, Dashboard signals or outage/fault scenarios; record those separately using the linked report.
+
 ## Preparation (once per fresh clone)
 
 Follow [the root quick-start](../README.md) to configure five secrets and run the AppHost. Docker/OCI runtime must be running; the two HTTP URLs come from Aspire's Resources page, **not fixed ports**. In a new shell, substitute those resource URLs and export:
