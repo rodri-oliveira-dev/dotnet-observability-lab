@@ -99,7 +99,7 @@ views {
 
   view consolidationComponents of lab.consolidationWorker {
     title "C4 Level 3 - Consolidation.Worker"
-    description "Manual RabbitMQ acknowledgements after atomic PostgreSQL Inbox and read-model commit."
+    description "Manual RabbitMQ acknowledgements after atomic PostgreSQL Inbox and read-model commit; no Redis consumer lookup."
     include lab.rabbitmq
     include lab.consolidationWorker.rabbitConsumer
     include lab.consolidationWorker.inboxProcessor
@@ -131,7 +131,7 @@ views {
 
   view containers of lab {
     title "C4 Level 2 - Containers"
-    description "Shows independent APIs, PostgreSQL, Redis and RabbitMQ business relationships; separate OTLP export edges end at the local Aspire Dashboard, which does not route business traffic."
+    description "Shows independent APIs and active PostgreSQL, ingestion Redis and RabbitMQ business relationships; provisioned-only Redis references are not runtime edges. Separate OTLP exports end at the Aspire Dashboard, which does not route business traffic."
     include apiClient
     include developer
     include lab.ingestionApi
