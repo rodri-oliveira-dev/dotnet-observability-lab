@@ -1,6 +1,6 @@
 # Documentation
 
-This directory is the entry point for detailed project documentation.
+This directory is the entry point for detailed project documentation. Start with the [English README](../README.md) or the [README em Português (Brasil)](../README.pt-BR.md) for equivalent first-run instructions and a language switcher.
 
 ## Architecture
 
