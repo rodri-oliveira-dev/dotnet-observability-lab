@@ -21,7 +21,7 @@ def exchange(base_url, method, path, value=None, key=None):
     headers = {}
     data = None
     if value is not None:
-        data = json.dumps({"value": value}).encode("utf-8")
+        data = ('{"value":' + value + '}').encode("utf-8")  # Decimal JSON number, not a JSON string
         headers["Content-Type"] = "application/json"
     if key is not None:
         headers["Idempotency-Key"] = key
