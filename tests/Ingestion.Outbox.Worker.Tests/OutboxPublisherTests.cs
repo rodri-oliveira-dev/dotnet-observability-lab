@@ -7,6 +7,7 @@ using Contracts;
 using Ingestion.Outbox.Worker;
 using Ingestion.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -40,6 +41,46 @@ public sealed class OutboxDatabaseFixture : IAsyncLifetime
 public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
     : IClassFixture<OutboxDatabaseFixture>
 {
+
+    [Fact]
+    public async Task Hosted_worker_logs_scope_resolution_failure_and_stops_cleanly()
+    {
+        // A transient scope/resolution failure must not crash the hosted service.
+        // Cancellation while waiting for the next poll must stop it promptly.
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var logger = new RecordingWorkerLogger();
+        using var worker = new OutboxBackgroundService(
+            services.GetRequiredService<IServiceScopeFactory>(),
+            TimeProvider.System,
+            Options.Create(new OutboxOptions { PollInterval = TimeSpan.FromHours(1) }),
+            logger);
+        await worker.StartAsync(CancellationToken.None);
+        var eventId = await logger.Failure.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(6103, eventId.Id);
+        Assert.IsType<InvalidOperationException>(eventId.Exception);
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public void Publisher_omits_trace_headers_without_valid_W3C_context_and_keeps_trace_state()
+    {
+        Assert.Null(RabbitMqOutboxMessagePublisher.BuildTraceHeaders(null));
+        using var hierarchical = new Activity("legacy");
+        hierarchical.SetIdFormat(ActivityIdFormat.Hierarchical);
+        hierarchical.Start();
+        Assert.Null(RabbitMqOutboxMessagePublisher.BuildTraceHeaders(hierarchical));
+        hierarchical.Stop();
+
+        using var producer = new Activity("publisher");
+        producer.SetIdFormat(ActivityIdFormat.W3C);
+        producer.TraceStateString = "vendor=value";
+        producer.Start();
+        var headers = RabbitMqOutboxMessagePublisher.BuildTraceHeaders(producer);
+        Assert.NotNull(headers);
+        Assert.Equal(producer.Id, Encoding.UTF8.GetString(Assert.IsType<byte[]>(headers["traceparent"])));
+        Assert.Equal("vendor=value", Encoding.UTF8.GetString(Assert.IsType<byte[]>(headers["tracestate"])));
+    }
+
     [Fact]
     public void Publisher_encodes_W3C_producer_context_in_RabbitMQ_headers()
     {
@@ -447,6 +488,23 @@ public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
         TimeProvider? clock = null) =>
         new(db, publisher, clock ?? TimeProvider.System, Options.Create(new OutboxOptions()),
             NullLogger<OutboxProcessor>.Instance);
+
+    private sealed class RecordingWorkerLogger : ILogger<OutboxBackgroundService>
+    {
+        public TaskCompletionSource<(int Id, Exception Exception)> Failure { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Error && exception is not null)
+                Failure.TrySetResult((eventId.Id, exception));
+        }
+    }
 
     private sealed class RecordingOutboxLogger : ILogger<OutboxProcessor>
     {

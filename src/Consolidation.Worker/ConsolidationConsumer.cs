@@ -97,6 +97,8 @@ internal sealed partial class ConsolidationConsumer(IConnection connection, ISer
                 byte[] bytes when bytes.Length <= maxLength => new UTF8Encoding(false, true).GetString(bytes),
                 ReadOnlyMemory<byte> bytes when bytes.Length <= maxLength =>
                     new UTF8Encoding(false, true).GetString(bytes.Span),
+                Memory<byte> bytes when bytes.Length <= maxLength =>
+                    new UTF8Encoding(false, true).GetString(bytes.Span),
                 string text when text.Length <= maxLength => text,
                 _ => string.Empty
             };

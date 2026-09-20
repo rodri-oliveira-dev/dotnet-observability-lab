@@ -33,7 +33,28 @@ O `release.yml` de ReliableWebhooks publica pacotes NuGet e manipula tags,
 artefatos e credenciais; o laboratório ainda não possui fluxo de publicação
 ou entrega de seus serviços. Importá-lo criaria automações sem consumidor.
 O `sonar.yml` depende de configuração e token para um projeto SonarQube Cloud,
-além de um scanner e coleta de cobertura que não fazem parte da baseline
+além de um scanner específico para Sonar que não faz parte da baseline
 deste laboratório. Adicioná-lo como check opcional que sempre é ignorado
 produziria um status pouco informativo. Essas integrações devem ser propostas
 separadamente quando houver estratégia de release ou projeto Sonar provisionado.
+
+## Issue #11: quality and coverage gates
+
+The existing ingestion-integration workflow runs on every PR to main, every push to main and manual dispatch; it now has no PR path exclusions. It restores .NET/Node tools, checks transitive dependency boundaries, runs ADR Guard, regenerates the ADR index and fails if docs/adr/README.md differs from the committed index. It validates, formats and builds LikeC4 before restoring and building the solution and running all five test projects against PostgreSQL where required.
+
+To reproduce the new gates locally after restoring tools and building the solution in Release mode:
+
+```bash
+python3 -m unittest discover -s scripts -p 'test_*.py'
+python3 scripts/check-architecture.py
+dotnet tool run adr-guard check docs/adr
+dotnet tool run adr-guard index docs/adr
+git ls-files --error-unmatch -- docs/adr/README.md >/dev/null
+git diff --exit-code -- docs/adr/README.md
+npm run architecture:validate
+npm run architecture:format:check
+npm run architecture:build
+bash scripts/test-with-coverage.sh
+```
+
+The coverage script uses coverlet.msbuild 10.0.1 with explicit MSBuild properties, producing Cobertura/OpenCover under TestResults/coverage. Its Python gate counts each production source line once across test suites (covered if any suite executes it), rejects missing/empty reports **and missing non-excluded production source files**, and fails below **80% global line coverage**. The only source-file exclusions are generated code, migrations, design-time DbContext factories, `Program.cs` and the Aspire `AppHost.cs` composition root (bootstrap), plus the declaration-only `IOutboxMessagePublisher.cs` interface (no executable lines); application behavior and telemetry remain included. The architecture gate checks transitive project boundaries, prohibits transport/composition packages or project dependencies in pure domain/data projects, and rejects forbidden C# references in their source and application business handlers (including aliases and fully qualified names). Local PostgreSQL integration tests require Docker. CodeQL, Dependency Review and Dependabot remain independently configured; no other security or release automation was imported.

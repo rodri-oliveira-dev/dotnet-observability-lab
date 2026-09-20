@@ -56,3 +56,7 @@ dotnet tool run adr-guard index docs/adr
 ```
 
 Tests and coverage are introduced as behavior is added. Do not create tests for framework internals merely to increase coverage.
+
+## CI-equivalent local checks
+
+After the Release build, run `python3 scripts/check-architecture.py` and `bash scripts/test-with-coverage.sh` to exercise the five existing test suites and enforce the global 80% line-coverage threshold. PostgreSQL integration tests require a Docker-compatible engine. Keep ADR Guard, ADR index and LikeC4 checks in the validation sequence above.
