@@ -6,6 +6,8 @@ This runbook exercises the **implemented** four-process lab against a disposable
 
 The [live verification report](runtime-verification.md) records the current execution blocker and provides an evidence checklist for all six scenarios. **The scenarios below are procedures and expected signals, not evidence of a successful live Aspire run.** After starting a disposable environment, `python3 scripts/runtime_http_smoke.py --output /tmp/lab-http-evidence.json` can check HTTP statuses, receipt identity and asynchronous read-model count/sum deltas for the first two scenarios. It does not check database rows, RabbitMQ message metadata, Dashboard signals or outage/fault scenarios; record those separately using the linked report.
 
+For **live evidence collection** of all six cases, use the [opt-in local evidence runner and its exact prerequisite/checkpoint instructions](runtime-verification.md#guided-live-evidence-collector-issue-40). It captures actual HTTP and application-role PostgreSQL before/after states, can replay the original AMQP MessageId twice, and guides manual outage/fault checkpoints. It does not scrape or fabricate Aspire Dashboard traces/logs/metrics, and its output remains partial evidence until the operator attaches observed telemetry and cleanup records. Never run the fault-injection cases against non-disposable data.
+
 ## Preparation (once per fresh clone)
 
 Follow [the root quick-start](../README.md) to configure five secrets and run the AppHost. Docker/OCI runtime must be running; the two HTTP URLs come from Aspire's Resources page, **not fixed ports**. In a new shell, substitute those resource URLs and export:
