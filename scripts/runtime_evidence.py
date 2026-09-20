@@ -38,7 +38,7 @@ SQL = {
         SELECT o."Id" AS event_id, o.value_id, v.idempotency_key,
           o.published_at IS NOT NULL AS published, o.publish_attempts,
           o.traceparent, o.payload
-        FROM outbox_messages o JOIN received_values v ON v.id = o.value_id
+        FROM outbox_messages o JOIN received_values v ON v."Id" = o.value_id
         WHERE v.idempotency_key LIKE 'runtime-evidence-%'
         ORDER BY o.occurred_at DESC LIMIT 25
       ) x))::text;""",
