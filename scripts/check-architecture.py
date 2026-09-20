@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Reject cross-boundary project references and transport imports in business code."""
 from pathlib import Path
-import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -58,7 +57,7 @@ for source in business_sources:
     if not source.is_file() or "Migrations" in source.parts:
         continue
     for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
-        if re.search(r"^\\s*(?:global\\s+)?using\\s+(?:static\\s+)?(?:RabbitMQ\\.Client|Aspire)(?:\\.|\\s*;)", line):
+        if line.lstrip().startswith(("using RabbitMQ.Client", "using Aspire.", "global using RabbitMQ.Client", "global using Aspire.")):
             errors.append(f"{source.relative_to(ROOT)}:{number}: transport/composition import in business code")
 
 if errors:
