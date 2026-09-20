@@ -40,6 +40,27 @@ public sealed class OutboxDatabaseFixture : IAsyncLifetime
 public sealed class OutboxPublisherTests(OutboxDatabaseFixture fixture)
     : IClassFixture<OutboxDatabaseFixture>
 {
+
+    [Fact]
+    public void Publisher_omits_trace_headers_without_valid_W3C_context_and_keeps_trace_state()
+    {
+        Assert.Null(RabbitMqOutboxMessagePublisher.BuildTraceHeaders(null));
+        using var hierarchical = new Activity("legacy");
+        hierarchical.SetIdFormat(ActivityIdFormat.Hierarchical);
+        hierarchical.Start();
+        Assert.Null(RabbitMqOutboxMessagePublisher.BuildTraceHeaders(hierarchical));
+        hierarchical.Stop();
+
+        using var producer = new Activity("publisher");
+        producer.SetIdFormat(ActivityIdFormat.W3C);
+        producer.TraceStateString = "vendor=value";
+        producer.Start();
+        var headers = RabbitMqOutboxMessagePublisher.BuildTraceHeaders(producer);
+        Assert.NotNull(headers);
+        Assert.Equal(producer.Id, Encoding.UTF8.GetString(Assert.IsType<byte[]>(headers["traceparent"])));
+        Assert.Equal("vendor=value", Encoding.UTF8.GetString(Assert.IsType<byte[]>(headers["tracestate"])));
+    }
+
     [Fact]
     public void Publisher_encodes_W3C_producer_context_in_RabbitMQ_headers()
     {

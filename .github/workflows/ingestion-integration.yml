@@ -55,6 +55,8 @@ jobs:
       - name: Check deterministic ADR index
         run: |
           dotnet tool run adr-guard index docs/adr
+          # A deleted index recreated by ADR Guard is untracked and invisible to git diff.
+          git ls-files --error-unmatch -- docs/adr/README.md >/dev/null
           git diff --exit-code -- docs/adr/README.md
       - name: Validate LikeC4 model and formatting
         run: |

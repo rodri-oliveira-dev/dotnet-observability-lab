@@ -189,6 +189,77 @@ public sealed class ConsolidationProcessorTests
         Assert.Equal(later, total.LastUpdatedAt);
     }
 
+
+    [Fact]
+    public void Consumer_rejects_invalid_wire_identity_and_timestamp_before_persistence()
+    {
+        var valid = new ValueReceivedV1(Guid.NewGuid(), Guid.NewGuid(), 5m, DateTimeOffset.UtcNow);
+        byte[] Encode(ValueReceivedV1 value) => System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(value);
+        string id = valid.EventId.ToString("D");
+        Assert.Equal(valid, ConsolidationConsumer.DeserializeAndValidate(Encode(valid), id));
+        Assert.Throws<System.Text.Json.JsonException>(() =>
+            ConsolidationConsumer.DeserializeAndValidate(Encode(valid), Guid.NewGuid().ToString("D")));
+        Assert.Throws<System.Text.Json.JsonException>(() =>
+            ConsolidationConsumer.DeserializeAndValidate(Encode(valid), null));
+        Assert.Throws<System.Text.Json.JsonException>(() =>
+            ConsolidationConsumer.DeserializeAndValidate(
+                Encode(valid with { EventId = Guid.Empty }), Guid.Empty.ToString("D")));
+        Assert.Throws<System.Text.Json.JsonException>(() =>
+            ConsolidationConsumer.DeserializeAndValidate(
+                Encode(valid with { ValueId = Guid.Empty }), id));
+        Assert.Throws<System.Text.Json.JsonException>(() =>
+            ConsolidationConsumer.DeserializeAndValidate(
+                Encode(valid with { OccurredAt = default }), id));
+    }
+
+    [Fact]
+    public void Consumer_rejects_malformed_wire_envelopes_without_writing_inbox()
+    {
+        var message = new ValueReceivedV1(Guid.NewGuid(), Guid.NewGuid(), 0m, DateTimeOffset.UtcNow);
+        var id = message.EventId.ToString("D");
+        foreach (var payload in new[]
+        {
+            "[]",
+            "{}",
+            """{"Value":"12","OccurredAt":"2026-09-19T12:00:00+00:00"}""",
+            """{"Value":12,"OccurredAt":42}""",
+            """{"Value":12,"EventId":"not-a-guid"}"""
+        })
+        {
+            Assert.Throws<System.Text.Json.JsonException>(() =>
+                ConsolidationConsumer.DeserializeAndValidate(Encoding.UTF8.GetBytes(payload), id));
+        }
+    }
+
+    [Fact]
+    public void Consumer_preserves_valid_trace_state_and_ignores_oversized_carriers()
+    {
+        using var producer = new Activity("producer");
+        producer.SetIdFormat(ActivityIdFormat.W3C);
+        producer.TraceStateString = "vendor=value";
+        producer.Start();
+        var headers = new Dictionary<string, object?>
+        {
+            ["traceparent"] = Encoding.UTF8.GetBytes(producer.Id!),
+            ["tracestate"] = Encoding.UTF8.GetBytes("vendor=value")
+        };
+        var parsed = ConsolidationConsumer.ExtractParent(headers);
+        Assert.Equal(producer.TraceId, parsed.TraceId);
+        Assert.Equal("vendor=value", parsed.TraceState);
+
+        headers["traceparent"] = producer.Id!;
+        Assert.Equal(producer.TraceId, ConsolidationConsumer.ExtractParent(headers).TraceId);
+        headers["traceparent"] = Encoding.UTF8.GetBytes(producer.Id!).AsMemory();
+        Assert.Equal(producer.TraceId, ConsolidationConsumer.ExtractParent(headers).TraceId);
+
+        headers["tracestate"] = new string('x', 513);
+        Assert.Equal(producer.TraceId, ConsolidationConsumer.ExtractParent(headers).TraceId);
+        headers["traceparent"] = new string('x', 257);
+        Assert.Equal(default, ConsolidationConsumer.ExtractParent(headers));
+        headers["traceparent"] = new object();
+        Assert.Equal(default, ConsolidationConsumer.ExtractParent(headers));
+    }
+
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;

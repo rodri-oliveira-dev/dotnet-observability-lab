@@ -83,22 +83,35 @@ def main() -> int:
     if not lines:
         print("ERROR: no repository production lines were instrumented", file=sys.stderr)
         return 1
-    # An artificially small subset can report 100% while ignoring application
-    # assemblies. Require the principal production flows in the aggregate.
-    required = {
-        "src/Ingestion.Api/Values/IngestValueHandler.cs",
-        "src/Ingestion.Outbox.Worker/OutboxProcessor.cs",
-        "src/Consolidation.Worker/ConsolidationProcessor.cs",
-        "src/Consolidation.Api/Consolidated/ConsolidatedQuery.cs",
+    # Discover the entire owned, executable source scope, not a short allow-list.
+    # AppHost.cs/Program.cs compose processes (bootstrap), migrations and
+    # design-time factories are tooling, and the interface has no executable lines.
+    # Any new application source is included automatically and must be measured.
+    excluded = {
+        "src/DotNetObservabilityLab.AppHost/AppHost.cs",
+        "src/Ingestion.Outbox.Worker/IOutboxMessagePublisher.cs",
     }
-    measured = sorted({file for file, _ in lines})
-    print(f"Instrumented production sources ({len(measured)}): {measured}")
+    def is_expected(path: Path) -> bool:
+        parts = path.relative_to(ROOT).parts
+        return (
+            path.suffix == ".cs"
+            and "bin" not in parts and "obj" not in parts
+            and "Migrations" not in parts
+            and path.name != "Program.cs"
+            and not path.name.endswith("DbContextFactory.cs")
+            and not path.name.endswith((".g.cs", ".generated.cs", ".Designer.cs"))
+            and path.relative_to(ROOT).as_posix() not in excluded
+        )
+
+    required = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "src").rglob("*.cs")
+        if is_expected(path)
+    }
+    measured = {file for file, _ in lines}
+    print(f"Instrumented production sources ({len(measured)}): {sorted(measured)}")
     print(f"Measured line coverage before completeness checks: {sum(lines.values())}/{len(lines)}")
-    for report in reports:
-        for item in ET.parse(report).getroot().findall(".//class"):
-            if "ConsolidationProcessor" in item.get("name", "") or "ConsolidationProcessor" in item.get("filename", ""):
-                print(f"TRACE: {report}: class={item.get('name')!r} filename={item.get('filename')!r}")
-    missing = required - {file for file, _ in lines}
+    missing = required - measured
     if missing:
         print(f"ERROR: missing production coverage sources: {sorted(missing)}", file=sys.stderr)
         return 1

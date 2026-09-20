@@ -47,8 +47,9 @@ To reproduce the new gates locally after restoring tools and building the soluti
 ```bash
 python3 scripts/check-architecture.py
 dotnet tool run adr-guard index docs/adr
+git ls-files --error-unmatch -- docs/adr/README.md >/dev/null
 git diff --exit-code -- docs/adr/README.md
 bash scripts/test-with-coverage.sh
 ```
 
-The coverage script uses coverlet.msbuild 10.0.1 with explicit MSBuild properties, producing Cobertura/OpenCover under TestResults/coverage. Its Python gate counts each production source line once across test suites (covered if any suite executes it), rejects missing/empty reports, and fails below **80% global line coverage**. It excludes generated code, migrations, design-time DbContext factories and Program.cs bootstrap files, not business behavior or telemetry. Local PostgreSQL integration tests require Docker. CodeQL, Dependency Review and Dependabot remain independently configured; no other security or release automation was imported.
+The coverage script uses coverlet.msbuild 10.0.1 with explicit MSBuild properties, producing Cobertura/OpenCover under TestResults/coverage. Its Python gate counts each production source line once across test suites (covered if any suite executes it), rejects missing/empty reports **and missing non-excluded production source files**, and fails below **80% global line coverage**. The only source-file exclusions are generated code, migrations, design-time DbContext factories, `Program.cs` and the Aspire `AppHost.cs` composition root (bootstrap), plus the declaration-only `IOutboxMessagePublisher.cs` interface (no executable lines); application behavior and telemetry remain included. The architecture gate checks transitive project boundaries, prohibits transport/composition packages or project dependencies in pure domain/data projects, and rejects forbidden C# references in their source and application business handlers (including aliases and fully qualified names). Local PostgreSQL integration tests require Docker. CodeQL, Dependency Review and Dependabot remain independently configured; no other security or release automation was imported.

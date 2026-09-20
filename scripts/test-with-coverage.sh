@@ -22,7 +22,7 @@ for project in "${projects[@]}"; do
     -p:CoverletOutput="$PWD/$results/$project/" \
     -p:CoverletOutputFormat="cobertura%2copencover" \
     -p:ExcludeByAttribute="GeneratedCodeAttribute%2cExcludeFromCodeCoverageAttribute" \
-    -p:ExcludeByFile="**/Program.cs%2c**/Migrations/**%2c**/*DbContextFactory.cs%2c**/obj/**"
+    -p:ExcludeByFile="**/Program.cs%2c**/DotNetObservabilityLab.AppHost/AppHost.cs%2c**/Migrations/**%2c**/*DbContextFactory.cs%2c**/obj/**"
 done
 
 python3 scripts/coverage_gate.py --results "$results" --minimum 80 "${projects[@]}"
