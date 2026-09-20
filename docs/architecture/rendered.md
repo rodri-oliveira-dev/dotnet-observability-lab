@@ -199,3 +199,4 @@ and telemetry via OTLP`" .-> AspireAppHostDashboard
   AspireAppHostDashboard -. "`Orchestrates local broker and its 
 management UI`" .-> LabRabbitmq
 ```
+
