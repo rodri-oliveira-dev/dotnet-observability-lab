@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura,opencover</Format>
+          <Include>[Ingestion.Api]*,[Ingestion.Persistence]*,[Ingestion.Outbox.Worker]*,[Consolidation.Api]*,[Consolidation.Persistence]*,[Consolidation.Worker]*,[Contracts]*,[Messaging]*</Include>
+          <Exclude>[*.Tests]*,[xunit.*]*,[Microsoft.*]*,[System.*]*</Exclude>
+          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+          <ExcludeByFile>**/Program.cs,**/Migrations/**,**/*DbContextFactory.cs,**/obj/**</ExcludeByFile>
+          <SingleHit>false</SingleHit>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
