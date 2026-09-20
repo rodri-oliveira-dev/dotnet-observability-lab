@@ -11,14 +11,30 @@ import sys
 import xml.etree.ElementTree as ET
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
 def source_path(raw: str) -> str | None:
-    # Coverlet may emit paths relative to the checkout or absolute runner paths.
-    path = raw.replace("\\", "/")
-    marker = "/src/"
-    if path.startswith("src/"):
+    # Coverlet can emit checkout-absolute, repo-relative OR project-relative
+    # filenames. Resolve against files actually present in this checkout.
+    path = raw.replace(chr(92), "/")
+    if path.startswith("src/") and (ROOT / path).is_file():
         return path
-    if marker in path:
-        return "src/" + path.split(marker, 1)[1]
+    if "/src/" in path:
+        candidate = "src/" + path.rsplit("/src/", 1)[1]
+        if (ROOT / candidate).is_file():
+            return candidate
+    basename = path.rsplit("/", 1)[-1]
+    if not basename.endswith(".cs"):
+        return None
+    candidates = sorted((ROOT / "src").rglob(basename))
+    if len(candidates) == 1:
+        return candidates[0].relative_to(ROOT).as_posix()
+    if len(candidates) > 1:
+        matching = [p for p in candidates if path.endswith(p.relative_to(ROOT).as_posix())]
+        if len(matching) == 1:
+            return matching[0].relative_to(ROOT).as_posix()
+        raise ValueError(f"ambiguous coverage source: {raw!r}")
     return None
 
 
@@ -62,6 +78,18 @@ def main() -> int:
         return 1
     if not lines:
         print("ERROR: no repository production lines were instrumented", file=sys.stderr)
+        return 1
+    # An artificially small subset can report 100% while ignoring application
+    # assemblies. Require the principal production flows in the aggregate.
+    required = {
+        "src/Ingestion.Api/Values/IngestValueHandler.cs",
+        "src/Ingestion.Outbox.Worker/OutboxProcessor.cs",
+        "src/Consolidation.Worker/ConsolidationProcessor.cs",
+        "src/Consolidation.Api/Consolidated/ConsolidatedQuery.cs",
+    }
+    missing = required - {file for file, _ in lines}
+    if missing:
+        print(f"ERROR: missing production coverage sources: {sorted(missing)}", file=sys.stderr)
         return 1
     covered = sum(lines.values())
     total = len(lines)
