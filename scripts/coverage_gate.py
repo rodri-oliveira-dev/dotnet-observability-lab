@@ -71,6 +71,10 @@ def main() -> int:
             print(f"ERROR: expected exactly one Cobertura report for {project}, found {len(found)}", file=sys.stderr)
             return 1
         reports.extend(found)
+    for report in reports:
+        root = ET.parse(report).getroot()
+        sources = sorted({element.get("filename", "") for element in root.findall(".//class")})
+        print(f"Collector report {report}: classes={len(sources)}, lines-valid={root.get('lines-valid')}, example files={sources[:6]}")
     try:
         lines = collect(reports)
     except (ET.ParseError, OSError, KeyError, ValueError) as exc:
