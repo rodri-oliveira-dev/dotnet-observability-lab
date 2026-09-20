@@ -54,7 +54,7 @@ The PostgreSQL administrator credential is used only by the local PostgreSQL res
 
 Redis is a current Aspire resource, with two distinct kinds of connection:
 
-- **Active runtime use:** `Ingestion.Api` uses Redis for best-effort HTTP idempotency receipt lookups after durable PostgreSQL writes. A cache miss or failure falls back to `ingestion_db`.
+- **Active runtime use:** `Ingestion.Api` checks Redis first for an HTTP idempotency receipt. On a cache miss or Redis failure, it queries the authoritative `ingestion_db`. It caches only receipts backed by committed PostgreSQL state; for a new value, the receipt is cached only after the value and Outbox transaction commits.
 - **Provisioned reference only:** `AppHost.cs` passes a Redis reference to `Consolidation.Worker`, but its `Program.cs` does not register a Redis client and the consumer does not query the cache. A possible consumer duplicate shortcut is post-v1 work, not a step in the implemented flow.
 
 The LikeC4 runtime relationship graph therefore contains an ingestion-to-Redis edge **but no consolidation-worker-to-Redis edge**; provisioning alone is not an active business dependency. The current consumer receives `ValueReceived.v1` from RabbitMQ and atomically persists its `EventId` (`MessageId`) in the PostgreSQL Inbox with the aggregate update in `consolidation_db`. PostgreSQL uniqueness handles duplicates, including concurrent deliveries, independently of Redis availability. A transient processing failure may be requeued; bounded consumer retries and a dead-letter queue are not implemented in v1.
