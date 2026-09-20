@@ -75,17 +75,28 @@ def psql(database):
     url = os.getenv("INGESTION_PGURI" if database == "ingestion" else "CONSOLIDATION_PGURI")
     if not url:
         raise ValueError("Set INGESTION_PGURI and CONSOLIDATION_PGURI to the separate application-role URIs")
-    require_local(url)
     expected = "ingestion_db" if database == "ingestion" else "consolidation_db"
-    from urllib.parse import urlsplit, unquote
+    from urllib.parse import urlsplit, unquote, parse_qs
     parsed = urlsplit(url)
+    if parsed.scheme not in ("postgres", "postgresql") or parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+        raise ValueError("PostgreSQL must use a localhost URI in a disposable Aspire lab")
     if unquote(parsed.path.lstrip("/")) != expected:
         raise ValueError(f"{database} connection must select {expected}")
-    if parsed.username != ("ingestion_app" if database == "ingestion" else "consolidation_app"):
+    if unquote(parsed.username or "") != ("ingestion_app" if database == "ingestion" else "consolidation_app"):
         raise ValueError("Use the corresponding application database role, not the admin")
-    proc = subprocess.run(["psql", url, "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1",
+    if parsed.query or parsed.fragment:
+        raise ValueError("URI query parameters are not permitted in evidence probes")
+    # Keep passwords out of argv (process listings) and never copy them to evidence.
+    env = dict(os.environ)
+    if parsed.password is not None:
+        env["PGPASSWORD"] = unquote(parsed.password)
+    env["PGHOST"] = parsed.hostname
+    env["PGPORT"] = str(parsed.port or 5432)
+    env["PGUSER"] = unquote(parsed.username)
+    env["PGDATABASE"] = expected
+    proc = subprocess.run(["psql", "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1",
                            "-c", SQL[database]], capture_output=True, text=True, timeout=15,
-                          check=False)
+                          check=False, env=env)
     if proc.returncode:
         raise RuntimeError(f"{database} database probe failed (exit {proc.returncode}; details redacted)")
     return json.loads(proc.stdout.strip())
