@@ -87,6 +87,13 @@ def main() -> int:
         "src/Consolidation.Worker/ConsolidationProcessor.cs",
         "src/Consolidation.Api/Consolidated/ConsolidatedQuery.cs",
     }
+    measured = sorted({file for file, _ in lines})
+    print(f"Instrumented production sources ({len(measured)}): {measured}")
+    print(f"Measured line coverage before completeness checks: {sum(lines.values())}/{len(lines)}")
+    for report in reports:
+        for item in ET.parse(report).getroot().findall(".//class"):
+            if "ConsolidationProcessor" in item.get("name", "") or "ConsolidationProcessor" in item.get("filename", ""):
+                print(f"TRACE: {report}: class={item.get('name')!r} filename={item.get('filename')!r}")
     missing = required - {file for file, _ in lines}
     if missing:
         print(f"ERROR: missing production coverage sources: {sorted(missing)}", file=sys.stderr)
