@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-The lab will need idempotent execution at two external boundaries:
+The lab requires idempotent execution at two external boundaries:
 
 - repeated HTTP write requests on the ingestion side;
 - duplicate or redelivered asynchronous messages on the consolidation side.
@@ -21,18 +21,16 @@ PostgreSQL already provides durable transactions and unique constraints and is r
 
 Use **PostgreSQL as the authoritative idempotency guarantee** and **Redis only as an optional fast path/optimization**.
 
-The planned ownership is:
+The current v1 ownership is:
 
-- `Ingestion.Api` may use Redis to short-circuit known repeated HTTP idempotency keys, while `ingestion_db` remains authoritative;
-- `Consolidation.Worker` may use Redis to short-circuit known duplicate message identifiers, while the persistent Inbox in `consolidation_db` remains authoritative.
+- `Ingestion.Api` uses Redis as a best-effort shortcut for known repeated HTTP idempotency keys, while `ingestion_db` remains authoritative;
+- `Consolidation.Worker` checks the durable Inbox in `consolidation_db` and does **not** query Redis. Aspire provisions a Redis reference for the worker, but no Redis client is registered in the worker process. A Redis duplicate shortcut for the consumer is optional post-v1 work, not a runtime step.
 
 Redis loss, eviction, or temporary unavailability must never allow a duplicate operation to violate durable correctness.
 
 No correctness-sensitive transaction spans PostgreSQL and Redis.
 
-Redis is introduced as an Aspire resource in this issue so the intended topology is explicit, but the actual HTTP idempotency and consumer deduplication behavior is implemented by later issues.
-
-The applications that do not participate in those fast paths do not receive a Redis reference.
+Redis is provisioned as an Aspire resource. HTTP receipt caching is implemented in `Ingestion.Api`, whereas consumer deduplication is implemented solely through PostgreSQL Inbox uniqueness and transaction atomicity. `Ingestion.Outbox.Worker` and `Consolidation.Api` receive no Redis reference. Provisioning a reference to `Consolidation.Worker` does not imply an active cache dependency.
 
 ## Consequences
 
@@ -46,7 +44,7 @@ Positive consequences:
 Trade-offs and constraints:
 
 - duplicate checks may still require PostgreSQL access;
-- later implementations must define cache invalidation/retention behavior without assuming cache permanence;
+- the implemented HTTP receipt cache uses a bounded 24-hour TTL; any future consumer cache shortcut must define its own retention semantics without assuming cache permanence;
 - telemetry must distinguish durable idempotency decisions from cache hits/misses;
 - Redis health must not be confused with the correctness of persisted business state.
 
@@ -69,7 +67,7 @@ event in the same PostgreSQL transaction.
   pending Outbox message; the independent worker claims pending rows with
   PostgreSQL row locks and commits PublishedAt only after broker confirmation.
   A crash after broker confirmation but before database commit may duplicate
-  publication, so the future consumer must use a durable Inbox.
+  publication; the current consumer's durable Inbox makes such redelivery safe.
 
 The ingestion API alone applies its schema migrations at startup; its worker shares the
 persistence model but does not execute migrations. The consolidation boundary remains
