@@ -77,6 +77,16 @@ dotnet tool run adr-guard index docs/adr
 
 See [docs/architecture/README.md](docs/architecture/README.md) for database ownership, C4 levels, migration commands, model conventions, and maintenance rules.
 
+## CI and global coverage
+
+Pull requests and main-branch pushes validate ADR Guard, the deterministic ADR
+index, LikeC4, architectural dependency boundaries, Release build and the five
+existing test suites. Global line coverage below 80% fails the quality workflow.
+After restoring/building the solution in Release mode, run the same suites and
+coverage enforcement with `bash scripts/test-with-coverage.sh`. PostgreSQL
+integration tests require Docker. See [CI and quality gates](docs/ci.md) for
+the full local sequence and the separate CodeQL/Dependency Review workflows.
+
 ## Local PostgreSQL secrets
 
 The persistent PostgreSQL volume requires stable credentials across AppHost runs. Store the three local passwords in the AppHost user-secrets store before the first run:
