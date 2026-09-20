@@ -52,12 +52,12 @@ The current data topology is one Aspire-managed PostgreSQL server resource conta
 
 The PostgreSQL administrator credential is used only by the local PostgreSQL resource for provisioning and health operations. It is not injected into application processes.
 
-Redis is also a current Aspire resource, but it is deliberately wired only to:
+Redis is a current Aspire resource, with two distinct kinds of connection:
 
-- `Ingestion.Api` for the implemented HTTP idempotency fast path;
-- `Consolidation.Worker` as a provisioned Aspire reference for a possible future duplicate-message fast path; the consumer does not use Redis.
+- **Active runtime use:** `Ingestion.Api` uses Redis for best-effort HTTP idempotency receipt lookups after durable PostgreSQL writes. A cache miss or failure falls back to `ingestion_db`.
+- **Provisioned reference only:** `AppHost.cs` passes a Redis reference to `Consolidation.Worker`, but its `Program.cs` does not register a Redis client and the consumer does not query the cache. A possible consumer duplicate shortcut is post-v1 work, not a step in the implemented flow.
 
-Redis is not persistent correctness state. PostgreSQL remains authoritative.
+The LikeC4 runtime relationship graph therefore contains an ingestion-to-Redis edge **but no consolidation-worker-to-Redis edge**; provisioning alone is not an active business dependency. The current consumer receives `ValueReceived.v1` from RabbitMQ and atomically persists its `EventId` (`MessageId`) in the PostgreSQL Inbox with the aggregate update in `consolidation_db`. PostgreSQL uniqueness handles duplicates, including concurrent deliveries, independently of Redis availability. A transient processing failure may be requeued; bounded consumer retries and a dead-letter queue are not implemented in v1.
 
 RabbitMQ is now an Aspire-managed broker with persistent data, management UI, and a
 worker-owned durable direct exchange (`lab.events.v1`) bound to a durable queue
@@ -93,7 +93,7 @@ Do not create a component for every class. A component should represent a meanin
 
 ### Dynamic write/read flow
 
-The [LikeC4 dynamic view](views.c4) `valueWriteFlow` orders one successful POST, its durable Outbox handoff, the broker-confirmed event, the transactional Inbox update, and a later **separate** GET. It models one scenario, not additional static dependencies or a promise of a single atomic distributed transaction. The AppHost/Dashboard receives OTLP export from the processes, but is not a hop in the business flow. Follow [the hands-on scenarios](../scenarios.md) to compare this intended path with real sampled traces, structured logs, and meters. A GET is a new HTTP trace; delays, failed attempts and duplicate deliveries can add runtime spans that are not steps in the nominal dynamic view.
+The [LikeC4 dynamic view](views.c4) `valueWriteFlow` orders one successful POST, its durable Outbox handoff, the broker-confirmed event, the PostgreSQL Inbox plus aggregate transaction (without a Redis consumer lookup), and a later **separate** GET. It models one scenario, not additional static dependencies or a promise of a single atomic distributed transaction. The AppHost/Dashboard receives OTLP export from the processes, but is not a hop in the business flow. Follow [the hands-on scenarios](../scenarios.md) to compare this intended path with real sampled traces, structured logs, and meters. A GET is a new HTTP trace; delays, failed attempts and duplicate deliveries can add runtime spans that are not steps in the nominal dynamic view.
 
 ## Database ownership
 
