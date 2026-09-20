@@ -1,5 +1,4 @@
 """Pure-stdlib tests for the opt-in HTTP smoke harness; no Aspire claims."""
-import io
 import json
 import unittest
 import urllib.request
