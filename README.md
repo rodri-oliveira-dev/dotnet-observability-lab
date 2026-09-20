@@ -9,7 +9,9 @@ An educational, runnable **.NET 10 / Aspire / OpenTelemetry** reference lab for 
 
 ## Architecture at a glance
 
-The [LikeC4 architecture model and view index](docs/architecture/README.md) are the source of truth for the C4 System Context, Container, Component and dynamic flow views; this README summarizes responsibilities rather than maintaining a competing diagram. To see the **rendered interactive views locally**, run `npm ci && npm run architecture:dev` from the repository root and open the URL printed by LikeC4. A publicly accessible rendered overview is tracked separately in [issue #34](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/issues/34); the source files linked here are not themselves rendered diagrams.
+**[View the rendered C4 Container overview directly on GitHub](docs/architecture/rendered.md#c4-level-2---containers)** · [Browse all seven rendered LikeC4 views](docs/architecture/rendered.md) · [Download interactive site and PNG previews](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/architecture-preview.yml)
+
+The [LikeC4 architecture model and view index](docs/architecture/README.md) are the source of truth for the C4 System Context, Container, Component and dynamic flow views. The gallery above is generated from the same `.c4` model as GitHub-rendered Mermaid, not a second hand-maintained diagram. For an interactive preview from a fresh clone, run `npm ci && npm run architecture:dev` in the repository root and open the URL shown by LikeC4. The workflow linked above offers a downloadable static site and PNG exports; this README does not claim a publicly deployed Pages site.
 
 **Nominal data path (textual overview, not a second C4 diagram):** `POST /values` → `ingestion_db` (value + Outbox) → `Ingestion.Outbox.Worker` → RabbitMQ → `Consolidation.Worker` → `consolidation_db` (Inbox + aggregate). A **later, independent** `GET /consolidated` reads `consolidation_db`.
 

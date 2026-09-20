@@ -1,0 +1,75 @@
+name: Render LikeC4 architecture
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/architecture/**'
+      - 'README.md'
+      - 'README.pt-BR.md'
+      - 'docs/README.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/check_architecture_exports.py'
+      - 'scripts/generate-architecture-markdown.sh'
+      - '.github/workflows/architecture-preview.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/architecture/**'
+      - 'README.md'
+      - 'README.pt-BR.md'
+      - 'docs/README.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/check_architecture_exports.py'
+      - '.github/workflows/architecture-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: architecture-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Build site and seven LikeC4 views
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked architecture dependencies
+        run: npm ci
+      - name: Validate architecture source and formatting
+        run: |
+          npm run architecture:validate
+          npm run architecture:format:check
+      - name: Build relocatable LikeC4 site
+        run: npm run architecture:build
+      - name: Check GitHub-rendered Mermaid is synchronized with LikeC4
+        run: bash scripts/generate-architecture-markdown.sh --check
+      - name: Install browser for locked Playwright exporter
+        run: npx playwright install --with-deps chromium
+      - name: Export seven views from the same LikeC4 model
+        run: npm exec -- likec4 export png --flat -o dist/architecture-previews docs/architecture
+      - name: Check view images and site assets
+        run: python3 scripts/check_architecture_exports.py
+      - name: Publish view images and navigable static site as a PR artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: likec4-rendered-architecture
+          path: |
+            dist/architecture/
+            dist/architecture-previews/
+          if-no-files-found: error
+          retention-days: 14

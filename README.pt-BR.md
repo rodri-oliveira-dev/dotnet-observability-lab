@@ -9,7 +9,9 @@ Um laboratório educacional e executável de referência com **.NET 10 / Aspire 
 
 ## Visão geral da arquitetura
 
-O [modelo de arquitetura LikeC4 e o índice das visões](docs/architecture/README.md) são a fonte de verdade das visões C4 de Contexto do Sistema, Contêineres, Componentes e do fluxo dinâmico. Este README resume as responsabilidades, sem manter um segundo diagrama. Para visualizar as **visões interativas renderizadas localmente**, execute `npm ci && npm run architecture:dev` na raiz do repositório e abra o endereço exibido pelo LikeC4. A publicação de uma visão renderizada acessível pela internet está prevista na [issue #34](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/issues/34); os arquivos-fonte vinculados aqui não são, por si, diagramas renderizados.
+**[Veja a visão C4 de Contêineres renderizada diretamente no GitHub](docs/architecture/rendered.md#c4-level-2---containers)** · [Explore as sete visões LikeC4 renderizadas](docs/architecture/rendered.md) · [Baixe o site interativo e as imagens PNG](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/architecture-preview.yml)
+
+O [modelo de arquitetura LikeC4 e o índice das visões](docs/architecture/README.md) são a fonte de verdade das visões C4 de Contexto do Sistema, Contêineres, Componentes e do fluxo dinâmico. A galeria acima é gerada a partir do mesmo modelo `.c4` como Mermaid renderizado pelo GitHub, sem manter um segundo diagrama manual. Para visualizar uma versão interativa a partir de uma cópia nova do repositório, execute `npm ci && npm run architecture:dev` na raiz e abra o endereço informado pelo LikeC4. O workflow indicado acima disponibiliza o site estático e as imagens PNG para download; este README não afirma que existe um site publicado no GitHub Pages.
 
 **Caminho nominal dos dados (resumo textual, não um segundo diagrama C4):** `POST /values` → `ingestion_db` (valor + Outbox) → `Ingestion.Outbox.Worker` → RabbitMQ → `Consolidation.Worker` → `consolidation_db` (Inbox + agregado). Uma requisição **posterior e independente** a `GET /consolidated` consulta `consolidation_db`.
 

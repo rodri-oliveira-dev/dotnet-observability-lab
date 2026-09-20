@@ -66,7 +66,9 @@ class ReadmeNavigationTests(unittest.TestCase):
     def test_pending_runtime_and_diagram_status_not_reported_as_complete(self):
         for content in self.readmes:
             self.assertIn("npm ci && npm run architecture:dev", content)
-            self.assertIn("issues/34", content)
+            self.assertIn("docs/architecture/rendered.md#c4-level-2---containers", content)
+            self.assertIn("docs/architecture/rendered.md", content)
+            self.assertIn("architecture-preview.yml", content)
             self.assertIn("docs/runtime-verification.md", content)
             self.assertNotIn("83.23%", content)
 
