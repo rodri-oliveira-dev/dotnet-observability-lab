@@ -37,3 +37,18 @@ além de um scanner e coleta de cobertura que não fazem parte da baseline
 deste laboratório. Adicioná-lo como check opcional que sempre é ignorado
 produziria um status pouco informativo. Essas integrações devem ser propostas
 separadamente quando houver estratégia de release ou projeto Sonar provisionado.
+
+## Issue #11: quality and coverage gates
+
+The existing ingestion-integration workflow runs on every PR to main, every push to main and manual dispatch; it now has no PR path exclusions. It restores .NET/Node tools, checks transitive dependency boundaries, runs ADR Guard, regenerates the ADR index and fails if docs/adr/README.md differs from the committed index. It validates, formats and builds LikeC4 before restoring and building the solution and running all five test projects against PostgreSQL where required.
+
+To reproduce the new gates locally after restoring tools and building the solution in Release mode:
+
+```bash
+python3 scripts/check-architecture.py
+dotnet tool run adr-guard index docs/adr
+git diff --exit-code -- docs/adr/README.md
+bash scripts/test-with-coverage.sh
+```
+
+The coverage script uses coverlet.collector and coverlet.runsettings, producing Cobertura/OpenCover under TestResults/coverage. Its Python gate counts each production source line once across test suites (covered if any suite executes it), rejects missing/empty reports, and fails below **80% global line coverage**. It excludes generated code, migrations, design-time DbContext factories and Program.cs bootstrap files, not business behavior or telemetry. Local PostgreSQL integration tests require Docker. CodeQL, Dependency Review and Dependabot remain independently configured; no other security or release automation was imported.
