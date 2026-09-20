@@ -61,8 +61,9 @@ do not silently rewrite existing Outbox data.
 The implemented path is **at-least-once**. RabbitMQ may redeliver and the
 publisher may retry. The consolidation consumer uses a unique durable Inbox key
 (`MessageId` / `EventId`) in its own PostgreSQL transaction with the
-consolidated-state update; duplicate delivery is expected, and Redis is only
-an optimization. Acknowledgements must follow durable commit.
+consolidated-state update; duplicate delivery is expected. The consolidation
+consumer does not query Redis, despite its provisioned Aspire reference.
+Acknowledgements follow durable commit.
 
 A breaking payload change requires a new explicit event version and
 a consumer migration plan. Additive optional fields must remain tolerable to
