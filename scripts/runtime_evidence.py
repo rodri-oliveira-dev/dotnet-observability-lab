@@ -241,30 +241,114 @@ def scenario3(args, record):
         "meter/log/span in Aspire before marking full scenario PASS.")
 
 
-def guided(args, record):
-    """Non-destructive checkpoints; operator follows docs/scenarios.md and verifies actions."""
-    instructions = {
-        4: "Follow scenario 4: stop Outbox worker, POST a new value, stop ingestion-api, "
-           "restart only Outbox worker; wait for publication/consolidation while ingestion stays stopped.",
-        5: "Follow scenario 5: stop only RabbitMQ, POST a new value, verify unpublished Outbox; "
-           "restore RabbitMQ and verify eventual publication/consolidation.",
-        6: "Follow scenario 6 on disposable consolidation_db: acquire/release a SQL row lock, "
-           "then briefly install/remove the checked-in CHECK constraint and verify recovery. "
-           "Always perform cleanup, including on failure.",
-    }
-    record["limitations"].append("Checkpoint snapshots alone do not establish correct outage/fault timing.")
-    record["operator_actions"] = instructions[args.scenario]
-    print(instructions[args.scenario], file=sys.stderr)
-    print("Capture pre-intervention snapshot now; press Enter to continue.", file=sys.stderr)
-    input()
+def operator_checkpoint(instruction):
+    print("\\nOPERATOR ACTION (local disposable lab): " + instruction, file=sys.stderr)
+    input("Press Enter only once completed; Ctrl+C to abort: ")
+
+
+def pending_event(key):
+    return event_for_key(psql("ingestion"), key)
+
+
+def scenario4(args, record):
+    baseline = capture(args.ingestion, args.consolidation)
+    operator_checkpoint("STOP only ingestion-outbox-worker in Aspire Resources; leave both APIs up.")
+    key = "runtime-evidence-" + uuid.uuid4().hex + "-api-down"
+    post = http_post(args.ingestion, "11", key)
+    row = pending_event(key)
+    if row["published"]:
+        raise AssertionError("Outbox was published despite the requested stopped worker checkpoint")
+    operator_checkpoint("STOP only ingestion-api; keep consolidation-api running. "
+                        "Record the Aspire Resources state and a GET trace before continuing.")
+    while_stopped = capture(args.ingestion, args.consolidation)
+    if while_stopped["http"] != baseline["http"]:
+        raise AssertionError("Independent read changed before resuming the Outbox worker")
+    operator_checkpoint("RESTART only ingestion-outbox-worker while ingestion-api remains stopped. "
+                        "Do not restart the write API until after final checkpoint.")
+    after = observe_event(row["event_id"], baseline["http"]["count"] + 1,
+                          Decimal(baseline["http"]["sum"]) + Decimal("11"),
+                          args.consolidation, args.timeout)
+    record["observations"] = {"before": baseline, "post": post, "pending_event_id": row["event_id"],
+                              "while_ingestion_stopped": while_stopped, "after_worker_resumed": after}
+    record["limitations"].append("Operator must attach timestamped Aspire resource/GET evidence "
+                                 "that ingestion-api remained stopped during publication.")
+    operator_checkpoint("RESTART ingestion-api; confirm all resources are healthy and "
+                        "record cleanup. Do not omit this recovery step.")
+
+
+def scenario5(args, record):
     before = capture(args.ingestion, args.consolidation)
-    print("Perform and record the documented operator actions, including cleanup. "
-          "Press Enter only after the environment is restored.", file=sys.stderr)
-    input()
-    after = capture(args.ingestion, args.consolidation)
-    record["observations"] = {"before": before, "after": after}
-    record["limitations"].append("Operator action timestamps, pending-state snapshots, "
-                                 "trace/log/metric IDs, and cleanup evidence must be attached separately.")
+    operator_checkpoint("STOP only RabbitMQ in Aspire Resources; keep ingestion-api and PostgreSQL up.")
+    key = "runtime-evidence-" + uuid.uuid4().hex + "-broker-down"
+    post = http_post(args.ingestion, "7", key)
+    row = pending_event(key)
+    if row["published"]:
+        raise AssertionError("Event was published despite the requested stopped-broker checkpoint")
+    during = capture(args.ingestion, args.consolidation)
+    if during["http"] != before["http"]:
+        raise AssertionError("Read model advanced while broker was expected to be offline")
+    operator_checkpoint("RESTART RabbitMQ preserving its local data volume. If required, "
+                        "restart the workers. Capture observed failure/recovery logs and metrics.")
+    after = observe_event(row["event_id"], before["http"]["count"] + 1,
+                          Decimal(before["http"]["sum"]) + Decimal("7"),
+                          args.consolidation, args.timeout)
+    record["observations"] = {"before": before, "post": post, "pending_event_id": row["event_id"],
+                              "during_outage": during, "after_recovery": after}
+    record["limitations"].append("Attach actual stopped-broker resource state and worker "
+                                 "failure/recovery telemetry; SQL checks do not prove timing.")
+
+
+def scenario6(args, record):
+    before = capture(args.ingestion, args.consolidation)
+    if before["http"]["count"] < 1:
+        raise AssertionError("Seed at least one event to create consolidated_totals id=1 first")
+    operator_checkpoint("In dedicated psql session A against DISPOSABLE consolidation_db, "
+                        "run scripts/demo/hold-consolidation-lock.sql; leave its transaction open.")
+    lock_key = "runtime-evidence-" + uuid.uuid4().hex + "-lock"
+    lock_post = http_post(args.ingestion, "13", lock_key)
+    lock_row = pending_event(lock_key)
+    time.sleep(2)
+    while_locked = capture(args.ingestion, args.consolidation)
+    if while_locked["http"] != before["http"]:
+        raise AssertionError("Aggregate advanced while the row was expected to be locked")
+    operator_checkpoint("COMMIT or ROLLBACK psql session A now. Record elapsed time and "
+                        "long-running consumer span before proceeding.")
+    unlocked = observe_event(lock_row["event_id"], before["http"]["count"] + 1,
+                             Decimal(before["http"]["sum"]) + Decimal("13"),
+                             args.consolidation, args.timeout)
+    operator_checkpoint("Execute scripts/demo/enable-consolidation-failure.sql against "
+                        "DISPOSABLE consolidation_db. Keep this constraint installed BRIEFLY.")
+    failure_key = "runtime-evidence-" + uuid.uuid4().hex + "-failure"
+    failed_post = http_post(args.ingestion, "17", failure_key)
+    failure_row = pending_event(failure_key)
+    time.sleep(2)
+    during_failure = capture(args.ingestion, args.consolidation)
+    if during_failure["http"] != unlocked["http"]:
+        raise AssertionError("Aggregate changed while failure constraint was expected")
+    if any(str(row.get("message_id")) == str(failure_row["event_id"])
+           for row in during_failure["consolidation_db"]["rows"]):
+        raise AssertionError("Inbox persisted despite failing aggregate transaction")
+    operator_checkpoint("REMOVE the injected constraint immediately via "
+                        "scripts/demo/disable-consolidation-failure.sql; restart consumer if needed.")
+    recovered = observe_event(failure_row["event_id"], unlocked["http"]["count"] + 1,
+                              Decimal(unlocked["http"]["sum"]) + Decimal("17"),
+                              args.consolidation, args.timeout)
+    record["observations"] = {"before": before, "lock_post": lock_post,
+                              "lock_event_id": lock_row["event_id"], "while_locked": while_locked,
+                              "after_lock_released": unlocked, "failure_post": failed_post,
+                              "failure_event_id": failure_row["event_id"],
+                              "during_failure": during_failure, "after_failure_recovered": recovered}
+    record["limitations"].append("Attach exact SQL injection/rollback timestamps, "
+                                 "constraint cleanup proof and live latency/error trace/log/metric evidence.")
+
+
+def guided(args, record):
+    if args.scenario == 4:
+        scenario4(args, record)
+    elif args.scenario == 5:
+        scenario5(args, record)
+    else:
+        scenario6(args, record)
 
 
 def main(argv=None):
