@@ -242,7 +242,7 @@ def scenario3(args, record):
 
 
 def operator_checkpoint(instruction):
-    print("\\nOPERATOR ACTION (local disposable lab): " + instruction, file=sys.stderr)
+    print("\nOPERATOR ACTION (local disposable lab): " + instruction, file=sys.stderr)
     input("Press Enter only once completed; Ctrl+C to abort: ")
 
 
@@ -358,17 +358,18 @@ def guided(args, record):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenario", required=True, type=int, choices=tuple(SCENARIOS))
-    parser.add_argument("--ingestion-url", default=os.getenv("INGESTION_API_URL"))
-    parser.add_argument("--consolidation-url", default=os.getenv("CONSOLIDATION_API_URL"))
+    parser.add_argument("--ingestion-url", dest="ingestion", default=os.getenv("INGESTION_API_URL"))
+    parser.add_argument("--consolidation-url", dest="consolidation",
+                        default=os.getenv("CONSOLIDATION_API_URL"))
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--timeout", type=float, default=90)
     args = parser.parse_args(argv)
     try:
         require_disposable()
-        if not args.ingestion_url or not args.consolidation_url:
+        if not args.ingestion or not args.consolidation:
             raise ValueError("Set INGESTION_API_URL and CONSOLIDATION_API_URL from Aspire resources")
-        require_local(args.ingestion_url)
-        require_local(args.consolidation_url)
+        require_local(args.ingestion)
+        require_local(args.consolidation)
         if args.timeout <= 0 or args.output.exists():
             raise ValueError("Timeout must be positive and evidence output must not already exist")
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -388,8 +389,8 @@ def main(argv=None):
             else:
                 guided(args, record)
             record["result"] = "PARTIAL_EVIDENCE"
-        except (AssertionError, OSError, ValueError, RuntimeError, KeyError, TypeError,
-                EOFError, KeyboardInterrupt, subprocess.TimeoutExpired) as error:
+        except (AssertionError, AttributeError, OSError, ValueError, RuntimeError, KeyError,
+                TypeError, EOFError, KeyboardInterrupt, subprocess.TimeoutExpired) as error:
             record["result"] = "FAIL_OR_BLOCKED"
             record["error_type"] = type(error).__name__
             record["error"] = str(error) if isinstance(error, AssertionError) else "Probe failed or was interrupted (details redacted)"
