@@ -3,6 +3,8 @@
 from pathlib import Path
 import re
 import sys
+
+from csharp_source import mask_non_code
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,14 +73,14 @@ business_sources.update([
     SRC / "Ingestion.Outbox.Worker/OutboxProcessor.cs",
 ])
 
-# Ignore non-code trivia so comments/URLs/doc examples cannot trigger a false positive.
-trivia = re.compile(r'@"(?:[^"]|"")*"|"(?:\\.|[^"\\])*"|//[^\n]*|/\*[\s\S]*?\*/')
+# Remove comments and non-executable string contents, but inspect expressions
+# inside interpolated strings. Preserve line/character offsets for diagnostics.
 transport_type = re.compile(r'(?<![\w.])(?:global::)?(?:RabbitMQ\s*\.\s*Client\b|Aspire\s*\.)')
 for source in sorted(business_sources):
     if not source.is_file() or any(part in {"obj", "bin", "Migrations"} for part in source.parts):
         continue
     content = source.read_text(encoding="utf-8")
-    code = trivia.sub(lambda m: "\n" * m.group(0).count("\n"), content)
+    code = mask_non_code(content)
     match = transport_type.search(code)
     if match:
         line = code.count("\n", 0, match.start()) + 1

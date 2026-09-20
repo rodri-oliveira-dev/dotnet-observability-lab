@@ -48,6 +48,8 @@ jobs:
         run: |
           dotnet tool restore
           npm ci
+      - name: Check architecture source-scanner regressions
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Check project dependency boundaries
         run: python3 scripts/check-architecture.py
       - name: ADR Guard

@@ -45,10 +45,15 @@ The existing ingestion-integration workflow runs on every PR to main, every push
 To reproduce the new gates locally after restoring tools and building the solution in Release mode:
 
 ```bash
+python3 -m unittest discover -s scripts -p 'test_*.py'
 python3 scripts/check-architecture.py
+dotnet tool run adr-guard check docs/adr
 dotnet tool run adr-guard index docs/adr
 git ls-files --error-unmatch -- docs/adr/README.md >/dev/null
 git diff --exit-code -- docs/adr/README.md
+npm run architecture:validate
+npm run architecture:format:check
+npm run architecture:build
 bash scripts/test-with-coverage.sh
 ```
 
