@@ -4,6 +4,24 @@ LikeC4 is the source of truth for architecture diagrams in this repository.
 
 The model is intentionally small and follows the same principle as the implementation: document only distinctions that help explain ownership, runtime boundaries, reliability, and observability.
 
+## Rendered architecture — view directly on GitHub
+
+The [generated architecture gallery](rendered.md) contains all **seven LikeC4 views as GitHub-rendered Mermaid**. It is exported from [model.c4](model.c4) and [views.c4](views.c4), not a second architecture definition. The gallery contains the following navigable views:
+
+- [C4 Level 1 — System Context](rendered.md#c4-level-1---system-context)
+- [C4 Level 2 — Containers (overview)](rendered.md#c4-level-2---containers)
+- [C4 Level 3 — Ingestion.Api](rendered.md#c4-level-3---ingestionapi)
+- [C4 Level 3 — Ingestion.Outbox.Worker](rendered.md#c4-level-3---ingestionoutboxworker)
+- [C4 Level 3 — Consolidation.Api](rendered.md#c4-level-3---consolidationapi)
+- [C4 Level 3 — Consolidation.Worker](rendered.md#c4-level-3---consolidationworker)
+- [Dynamic view — accepted write to independent read](rendered.md#valuereceivedv1---accepted-write-to-independent-consolidated-read)
+
+**Regeneration (source changes only):** After editing the model or views, run `npm ci` followed by `bash scripts/generate-architecture-markdown.sh --write` from the repository root, review the generated `rendered.md` diff and commit it alongside the changed `.c4` files. Do **not** edit its Mermaid blocks manually. CI reruns the pinned LikeC4 exporter with `--check` and rejects stale committed views.
+
+**Interactive/static preview:** Run `npm run architecture:dev` locally, or `npm run architecture:build` to generate the navigable site at `dist/architecture` (with relative asset URLs). The [Render LikeC4 architecture workflow](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/architecture-preview.yml) validates the model, generates all seven PNG images with the same pinned LikeC4 version, checks the site assets and uploads `likec4-rendered-architecture` (PNG previews + static site) as a downloadable run artifact. Download/unzip the artifact and serve its `dist/architecture` folder with a local HTTP server (for example, `python3 -m http.server 8000 -d dist/architecture`) to browse it. Artifacts have limited retention; the committed Markdown gallery is the durable GitHub-readable entry point. **No public GitHub Pages deployment is claimed**.
+
+The dynamic view describes one *nominal* flow; actual sampled traces, retries and failures must be inspected independently in the Aspire Dashboard (see the [scenario runbook](../scenarios.md)). The Container view models active Redis usage only by `Ingestion.Api`; `Consolidation.Worker` has no Redis business lookup, even though AppHost provisions a reference.
+
 ## Architecture style
 
 The implementation style is:
@@ -242,7 +260,7 @@ Build the relocatable static site:
 npm run architecture:build
 ```
 
-The generated site is written to `dist/architecture` and is intentionally not committed.
+The generated site is written to `dist/architecture` and is intentionally not committed. Its GitHub-readable counterpart is the [model-generated Mermaid gallery](rendered.md), checked into the repository and validated by CI. The workflow also provides downloadable rendered PNGs and the static site; the gallery works without downloading an artifact or enabling GitHub Pages.
 
 Preview interactively during architecture work:
 
