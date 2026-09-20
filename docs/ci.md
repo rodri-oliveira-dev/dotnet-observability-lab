@@ -33,7 +33,7 @@ O `release.yml` de ReliableWebhooks publica pacotes NuGet e manipula tags,
 artefatos e credenciais; o laboratório ainda não possui fluxo de publicação
 ou entrega de seus serviços. Importá-lo criaria automações sem consumidor.
 O `sonar.yml` depende de configuração e token para um projeto SonarQube Cloud,
-além de um scanner e coleta de cobertura que não fazem parte da baseline
+além de um scanner específico para Sonar que não faz parte da baseline
 deste laboratório. Adicioná-lo como check opcional que sempre é ignorado
 produziria um status pouco informativo. Essas integrações devem ser propostas
 separadamente quando houver estratégia de release ou projeto Sonar provisionado.
@@ -51,4 +51,4 @@ git diff --exit-code -- docs/adr/README.md
 bash scripts/test-with-coverage.sh
 ```
 
-The coverage script uses coverlet.collector and coverlet.runsettings, producing Cobertura/OpenCover under TestResults/coverage. Its Python gate counts each production source line once across test suites (covered if any suite executes it), rejects missing/empty reports, and fails below **80% global line coverage**. It excludes generated code, migrations, design-time DbContext factories and Program.cs bootstrap files, not business behavior or telemetry. Local PostgreSQL integration tests require Docker. CodeQL, Dependency Review and Dependabot remain independently configured; no other security or release automation was imported.
+The coverage script uses coverlet.msbuild 10.0.1 with explicit MSBuild properties, producing Cobertura/OpenCover under TestResults/coverage. Its Python gate counts each production source line once across test suites (covered if any suite executes it), rejects missing/empty reports, and fails below **80% global line coverage**. It excludes generated code, migrations, design-time DbContext factories and Program.cs bootstrap files, not business behavior or telemetry. Local PostgreSQL integration tests require Docker. CodeQL, Dependency Review and Dependabot remain independently configured; no other security or release automation was imported.
