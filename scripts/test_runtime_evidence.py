@@ -46,6 +46,76 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
         self.assertIn("NOT VERIFIED", SCRIPT.read_text(encoding="utf-8"))
         self.assertIn("NOT INSPECTED", SCRIPT.read_text(encoding="utf-8"))
 
+    def test_main_wires_env_endpoints_and_writes_partial_evidence(self):
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp:
+            output = pathlib.Path(temp) / "evidence.json"
+            env = {
+                "ASPIRE_DISPOSABLE_LAB": "I_UNDERSTAND",
+                "INGESTION_API_URL": "http://localhost:5010",
+                "CONSOLIDATION_API_URL": "http://localhost:5020",
+            }
+            with patch.dict("os.environ", env, clear=True), \\
+                    patch.object(runner, "scenario1") as scenario:
+                exit_code = runner.main(["--scenario", "1", "--output", str(output)])
+            scenario.assert_called_once()
+            args, record = scenario.call_args.args
+            self.assertEqual((args.ingestion, args.consolidation),
+                             ("http://localhost:5010", "http://localhost:5020"))
+            self.assertEqual(record["scenario"], 1)
+            self.assertEqual(exit_code, 0)
+            evidence = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(evidence["result"], "PARTIAL_EVIDENCE")
+            self.assertEqual(evidence["runtime_acceptance"], "NOT VERIFIED")
+            self.assertEqual(evidence["dashboard"]["traces"], "NOT INSPECTED")
+
+    def test_main_cli_endpoints_override_environment(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp:
+            output = pathlib.Path(temp) / "evidence.json"
+            with patch.dict("os.environ", {"ASPIRE_DISPOSABLE_LAB": "I_UNDERSTAND"}, clear=True), \\
+                    patch.object(runner, "scenario2") as scenario:
+                exit_code = runner.main([
+                    "--scenario", "2", "--ingestion-url", "http://127.0.0.1:6010",
+                    "--consolidation-url", "http://127.0.0.1:6020",
+                    "--output", str(output),
+                ])
+            args = scenario.call_args.args[0]
+            self.assertEqual((args.ingestion, args.consolidation),
+                             ("http://127.0.0.1:6010", "http://127.0.0.1:6020"))
+            self.assertEqual(exit_code, 0)
+
+    def test_main_redacts_internal_attribute_error_and_preserves_evidence(self):
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp:
+            output = pathlib.Path(temp) / "evidence.json"
+            with patch.dict("os.environ", {"ASPIRE_DISPOSABLE_LAB": "I_UNDERSTAND"}, clear=True), \\
+                    patch.object(runner, "scenario1", side_effect=AttributeError("sensitive detail")):
+                exit_code = runner.main([
+                    "--scenario", "1", "--ingestion-url", "http://localhost:5010",
+                    "--consolidation-url", "http://localhost:5020",
+                    "--output", str(output),
+                ])
+            evidence = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(evidence["result"], "FAIL_OR_BLOCKED")
+            self.assertEqual(evidence["error_type"], "AttributeError")
+            self.assertNotIn("sensitive detail", output.read_text(encoding="utf-8"))
+
+    def test_operator_checkpoint_prints_newline_not_literal_backslash_n(self):
+        from io import StringIO
+
+        output = StringIO()
+        with patch.object(runner.sys, "stderr", output), patch("builtins.input", return_value=""):
+            runner.operator_checkpoint("Observe the local resources.")
+        self.assertTrue(output.getvalue().startswith("\\nOPERATOR ACTION"))
+        self.assertNotIn("\\\\nOPERATOR ACTION", output.getvalue())
+
     def test_replay_must_keep_original_message_id(self):
         import json
         from io import BytesIO
