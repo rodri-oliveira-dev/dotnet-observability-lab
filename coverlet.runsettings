@@ -5,7 +5,6 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura,opencover</Format>
-          <Include>[Ingestion.Api]*,[Ingestion.Persistence]*,[Ingestion.Outbox.Worker]*,[Consolidation.Api]*,[Consolidation.Persistence]*,[Consolidation.Worker]*,[Contracts]*,[Messaging]*</Include>
           <Exclude>[*.Tests]*,[xunit.*]*,[Microsoft.*]*,[System.*]*</Exclude>
           <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <ExcludeByFile>**/Program.cs,**/Migrations/**,**/*DbContextFactory.cs,**/obj/**</ExcludeByFile>
