@@ -15,10 +15,14 @@ projects=(
 )
 
 for project in "${projects[@]}"; do
+  mkdir -p "$results/$project"
   dotnet test "tests/$project/$project.csproj" \
     --configuration Release --no-build --no-restore \
-    --collect:"XPlat Code Coverage" --settings ./coverlet.runsettings \
-    --results-directory "$results/$project"
+    -p:CollectCoverage=true \
+    -p:CoverletOutput="$PWD/$results/$project/" \
+    -p:CoverletOutputFormat="cobertura%2copencover" \
+    -p:ExcludeByAttribute="GeneratedCodeAttribute%2cExcludeFromCodeCoverageAttribute" \
+    -p:ExcludeByFile="**/Program.cs%2c**/Migrations/**%2c**/*DbContextFactory.cs%2c**/obj/**"
 done
 
 python3 scripts/coverage_gate.py --results "$results" --minimum 80 "${projects[@]}"
