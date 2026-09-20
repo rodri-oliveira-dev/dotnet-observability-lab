@@ -37,10 +37,10 @@ The independent Outbox publisher maps this value to the AMQP message ID.
 
 Delivery is **at-least-once**, not exactly-once. A publisher can retry after
 uncertain broker confirmation and RabbitMQ can redeliver a message before an
-acknowledgement. The future consolidation consumer must atomically persist the
-Inbox message identity and its read-model update in `consolidation_db`; neither
-RabbitMQ acknowledgement nor Redis deduplication alone establishes correctness.
-No ordering guarantee is assumed beyond what a later consumer explicitly defines.
+acknowledgement. The consolidation consumer atomically persists the Inbox
+message identity and its read-model update in `consolidation_db`; neither
+RabbitMQ acknowledgement nor a Redis cache alone establishes correctness.
+The current consumer does not query Redis and does not assume event ordering.
 
 The independent Outbox worker now polls bounded batches under a PostgreSQL
 transaction using FOR UPDATE SKIP LOCKED; it publishes persistent messages
@@ -59,7 +59,13 @@ and next eligible retry time are persisted with bounded exponential backoff. The
 publisher skips not-yet-eligible rows so retries cannot starve later events.
 The publish timeout and retry schedule are controlled by the injected TimeProvider
 to support deterministic tests.
-Consuming, acknowledgements and Inbox processing remain for later issues.
+The consolidation worker now validates the `ValueReceived.v1` payload and the
+AMQP MessageId against its `EventId`, commits the Inbox identity and aggregate
+in one PostgreSQL transaction, and manually acknowledges only after commit
+(including previously committed duplicates). Malformed messages are rejected
+without requeue; transient processing failures can be requeued. A bounded
+consumer retry/backoff policy and dead-letter queue are optional future work,
+not implemented v1 behavior.
 
 ## Alternatives considered
 
@@ -77,8 +83,8 @@ Consuming, acknowledgements and Inbox processing remain for later issues.
 - The durable broker queue buffers messages while the consumer is unavailable,
   subject to the broker's storage and operational limits.
 - Broker availability affects the workers, not the two HTTP APIs.
-- Duplicate messages are part of the contract. The later consumer must use a
-  durable Inbox and explicitly control acknowledgement timing.
+- Duplicate messages are part of the contract. The consumer uses a durable
+  PostgreSQL Inbox and acknowledges deliveries only after durable processing.
 - Durable exchange/queue declarations alone do not make individual messages
   persistent: the publisher uses persistent delivery, mandatory routing and
   confirmations; unroutable/unconfirmed messages remain pending.

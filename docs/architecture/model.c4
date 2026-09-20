@@ -77,7 +77,7 @@ model {
     consolidationWorker = container "Consolidation.Worker" {
       #worker
       technology ".NET 10 Worker Service"
-      description "Extracts W3C RabbitMQ headers and traces its independent Inbox/aggregate transaction; PostgreSQL owns correctness."
+      description "Extracts W3C RabbitMQ headers and traces its independent Inbox/aggregate transaction; PostgreSQL owns deduplication, with no active Redis lookup."
       rabbitConsumer = component "RabbitMQ consumer adapter" {
         description "Validates event and AMQP identity, acknowledges only after commit and rejects malformed messages."
       }
@@ -98,7 +98,7 @@ model {
     redis = container "Redis" {
       #cache
       technology "Redis"
-      description "Disposable optimization resource for HTTP idempotency. Consolidation has a provisioned Aspire reference but performs no Redis lookup; PostgreSQL remains authoritative."
+      description "Best-effort HTTP idempotency cache used by Ingestion.Api. Aspire also provisions a reference to Consolidation.Worker, which makes no Redis lookup; PostgreSQL remains authoritative."
     }
 
     rabbitmq = container "RabbitMQ" {
@@ -146,7 +146,6 @@ model {
   lab.consolidationWorker -> lab.postgresql "Uses consolidation_db as consolidation_app"
 
   lab.ingestionApi -> lab.redis "Receives Redis for HTTP idempotency fast path"
-  lab.consolidationWorker -> lab.redis "Aspire reference for optional future optimization; no active Redis lookup"
 
   lab.ingestionOutboxWorker -> lab.rabbitmq "Publishes persistent integration events with broker confirmations"
   lab.ingestionOutboxWorker.outboxPoller -> lab.postgresql "Claims pending Outbox records and commits confirmed publication"

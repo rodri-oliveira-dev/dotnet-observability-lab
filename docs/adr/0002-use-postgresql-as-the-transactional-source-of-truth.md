@@ -6,10 +6,12 @@ Accepted
 
 ## Context
 
-The lab needs durable correctness for two independent service boundaries:
+The lab needs durable correctness for two independent service boundaries. At the time of this decision, the implementation was planned to persist:
 
-- ingestion must eventually persist received values, HTTP idempotency state, and Transactional Outbox records;
-- consolidation must eventually persist Inbox records and the consolidated read model.
+- received values, HTTP idempotency state, and Transactional Outbox records in ingestion;
+- Inbox records and the consolidated read model in consolidation.
+
+Both persistence flows are now implemented.
 
 Those operations require transactional atomicity and database-enforced uniqueness. The local environment should remain small and easy to run, but the read and write boundaries must not share tables or query each other's data.
 
@@ -34,7 +36,7 @@ The PostgreSQL administrator role is reserved for local provisioning and health 
 
 Each boundary owns its EF Core `DbContext`, mappings, migrations, tables, constraints, and transaction boundaries. No application may query or write the other boundary's database.
 
-PostgreSQL is the durable source of truth for correctness. Later idempotency, Outbox, and Inbox implementations must use PostgreSQL transactions and constraints where correctness depends on atomicity or uniqueness.
+PostgreSQL is the durable source of truth for correctness. HTTP idempotency and the ingestion Outbox share an atomic write in `ingestion_db`; the consolidation Inbox and aggregate update share an atomic transaction in `consolidation_db`. PostgreSQL unique constraints protect both idempotency boundaries. Redis is not authoritative and is not consulted by the consolidation consumer.
 
 The local PostgreSQL resource uses persistent container storage. Its administrator password and both application-role passwords are secret parameters stored outside source control and must remain stable for the lifetime of the data volume.
 
