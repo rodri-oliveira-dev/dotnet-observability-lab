@@ -45,6 +45,77 @@ The script does *not* connect to either database, publish AMQP messages, stop
 resources, inject faults, access the dashboard, or claim those tests passed.
 No other writer should modify the read model during the smoke run.
 
+## Guided live evidence collector (issue #40)
+
+The optional [live evidence runner](../scripts/runtime_evidence.py) probes **real local
+Aspire HTTP endpoints, separate application-role PostgreSQL databases and,
+for scenario 3, publishes the original stored payload and AMQP MessageId twice
+through the local RabbitMQ Management API**. Scenarios 4–6 pause at operator
+checkpoints to capture the before/during/after state while you stop/restart
+resources or run the documented disposable-database SQL fault scripts. No
+runtime disruptions or SQL fault injection happen automatically.
+
+The runner does **not** start Aspire, authenticate to the Aspire Dashboard,
+export OpenTelemetry signals, or declare the scenarios fully verified.
+Its output always says `runtime_acceptance: NOT VERIFIED` and its result
+`PARTIAL_EVIDENCE` means only the implemented HTTP/database/AMQP assertions
+passed. Trace IDs, real correlated structured logs, metric measurements,
+precise operator-action timestamps and cleanup evidence must be captured
+from the **running Aspire Dashboard**, attached to each scenario and reviewed
+before the issue's checklist or this report is marked PASS.
+
+Use a **disposable lab with no competing writers**. Install `psql` and Python
+3.10+ on the host running the local AppHost. From the Aspire Resources page,
+copy the *current* API HTTP addresses, PostgreSQL external host/port and
+RabbitMQ Management HTTP port. Use the same five configured persistent
+secrets from your local secret store; never save them in a committed file.
+Keep the database URI pointing to `localhost`, with the boundary-specific
+non-superuser and database (the runner rejects remote hosts, administrators
+and cross-boundary database names). For example, in a private shell:
+
+```bash
+export ASPIRE_DISPOSABLE_LAB=I_UNDERSTAND
+export INGESTION_API_URL='http://localhost:INGESTION_HTTP_PORT'
+export CONSOLIDATION_API_URL='http://localhost:CONSOLIDATION_HTTP_PORT'
+export INGESTION_PGURI='postgresql://ingestion_app:URL_ENCODED_PASSWORD@localhost:POSTGRES_PORT/ingestion_db'
+export CONSOLIDATION_PGURI='postgresql://consolidation_app:URL_ENCODED_PASSWORD@localhost:POSTGRES_PORT/consolidation_db'
+export RABBITMQ_MANAGEMENT_URL='http://localhost:RABBITMQ_MANAGEMENT_PORT'
+export RABBITMQ_USERNAME='YOUR_LOCAL_RABBITMQ_USERNAME'
+export RABBITMQ_PASSWORD='YOUR_LOCAL_RABBITMQ_PASSWORD'
+python3 scripts/runtime_evidence.py --scenario 1 --output /tmp/aspire-scenario-1.json
+python3 scripts/runtime_evidence.py --scenario 2 --output /tmp/aspire-scenario-2.json
+python3 scripts/runtime_evidence.py --scenario 3 --output /tmp/aspire-scenario-3.json
+python3 scripts/runtime_evidence.py --scenario 4 --output /tmp/aspire-scenario-4.json
+python3 scripts/runtime_evidence.py --scenario 5 --output /tmp/aspire-scenario-5.json
+python3 scripts/runtime_evidence.py --scenario 6 --output /tmp/aspire-scenario-6.json
+```
+
+Each command is **opt-in and independent**; do not run the six at once.
+Run scenario 1 first to create the aggregate, then 2–3 before 4–6. Scenario
+3 needs RabbitMQ Management enabled and routes two copies of the persisted
+event with the **original** AMQP `message_id`; check the actual consumer
+duplicate meter/log/span separately before accepting the scenario.
+Scenario 4 stops only the Outbox worker before the new POST; scenario 5
+requires the broker to be stopped **before** the new POST. Scenario 6 is
+interactive: create and release the row lock in a dedicated `psql` session,
+then install the failure constraint **briefly** and always remove it with
+[disable-consolidation-failure.sql](../scripts/demo/disable-consolidation-failure.sql)
+even if the runner errors or is interrupted. Verify no lock/constraint
+remains, restart any stopped resources and record their observed health.
+
+Evidence files contain real but *partial* observations (counts/sums, receipt
+and message IDs, timestamps and publication state). They intentionally omit
+database payloads, W3C traceparent and idempotency keys, and redact probe
+errors, but should still be treated as sensitive local output. Inspect and
+redact before sharing. The script uses exclusive file creation and refuses
+to overwrite an earlier run. Never upload credentials, raw `PGURI`, RabbitMQ
+authentication headers or unreviewed screenshots.
+
+**Acceptance:** for each scenario attach the redacted JSON *and* a separate
+manual record using the template below with real Dashboard trace/log/metric
+IDs and observed values, action timestamps, and cleanup evidence. A JSON
+`PARTIAL_EVIDENCE` result is not PASS and must not close issue #40.
+
 ## Live evidence collection (complete all six before checking off #32)
 
 Use [the six scenario commands and safety/cleanup instructions](scenarios.md).
