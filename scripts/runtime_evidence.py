@@ -302,6 +302,10 @@ def scenario6(args, record):
     before = capture(args.ingestion, args.consolidation)
     if before["http"]["count"] < 1:
         raise AssertionError("Seed at least one event to create consolidated_totals id=1 first")
+    # SQL fault injection is operator-controlled, not executed automatically.
+    # An interrupted run may leave the injected constraint in place: use the
+    # documented disable script before the next run and confirm its removal.
+
     operator_checkpoint("In dedicated psql session A against DISPOSABLE consolidation_db, "
                         "run scripts/demo/hold-consolidation-lock.sql; leave its transaction open.")
     lock_key = "runtime-evidence-" + uuid.uuid4().hex + "-lock"
