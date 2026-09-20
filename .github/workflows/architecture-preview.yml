@@ -56,13 +56,8 @@ jobs:
           npm run architecture:format:check
       - name: Build relocatable LikeC4 site
         run: npm run architecture:build
-      - name: Generate GitHub-rendered Mermaid from LikeC4
-        run: |
-          bash scripts/generate-architecture-markdown.sh --write
-          echo '__LIKEC4_MD_START__'
-          cat docs/architecture/rendered.md
-          echo '__LIKEC4_MD_END__'
-          git diff --exit-code -- docs/architecture/rendered.md
+      - name: Check GitHub-rendered Mermaid is synchronized with LikeC4
+        run: bash scripts/generate-architecture-markdown.sh --check
       - name: Install browser for locked Playwright exporter
         run: npx playwright install --with-deps chromium
       - name: Export seven views from the same LikeC4 model
