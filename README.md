@@ -3,9 +3,11 @@
 # dotnet-observability-lab
 
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) [![.NET Aspire](https://img.shields.io/badge/.NET-Aspire-512BD4?logo=dotnet&logoColor=white)](https://learn.microsoft.com/en-us/dotnet/aspire/) [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-instrumented-425CC7)](https://opentelemetry.io/)  
-[![Build, tests and coverage — main](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/ingestion-integration.yml/badge.svg?branch=main)](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/ingestion-integration.yml) [![CodeQL — main](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/codeql.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![Architecture: LikeC4](https://img.shields.io/badge/Architecture-LikeC4-606C38)](docs/architecture/README.md)
+[![Build, tests and coverage — main](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/ingestion-integration.yml/badge.svg?branch=main)](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/ingestion-integration.yml) [![CodeQL — main](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/codeql.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![Architecture: LikeC4](https://img.shields.io/badge/Architecture-LikeC4-606C38)](docs/architecture/README.md) [![Live architecture docs](https://img.shields.io/badge/docs-live-2ea44f)](https://rodri-oliveira-dev.github.io/dotnet-observability-lab/)
 
 An educational, runnable **.NET 10 / Aspire / OpenTelemetry** reference lab for reliable asynchronous processing, HTTP idempotency, and distributed tracing across independent APIs and workers. The deliberately simple business operation handles a decimal value: the focus is durable boundaries, at-least-once delivery, duplicate handling, and telemetry—not a large domain or unnecessary framework abstractions.
+
+**Live architecture documentation:** [browse the published interactive LikeC4 site](https://rodri-oliveira-dev.github.io/dotnet-observability-lab/).
 
 ## Architecture at a glance
 
