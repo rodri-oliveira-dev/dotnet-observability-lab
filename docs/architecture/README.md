@@ -2,6 +2,8 @@
 
 LikeC4 is the source of truth for architecture diagrams in this repository.
 
+**Live site:** [browse the published interactive architecture documentation](https://rodri-oliveira-dev.github.io/dotnet-observability-lab/).
+
 The model is intentionally small and follows the same principle as the implementation: document only distinctions that help explain ownership, runtime boundaries, reliability, and observability.
 
 ## Rendered architecture — view directly on GitHub
