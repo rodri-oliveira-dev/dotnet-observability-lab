@@ -2,8 +2,11 @@
 
 This directory is the entry point for detailed project documentation. Start with the [English README](../README.md) or the [README em Português (Brasil)](../README.pt-BR.md) for equivalent first-run instructions and a language switcher.
 
+**Live interactive architecture documentation:** [open the published LikeC4 site](https://rodri-oliveira-dev.github.io/dotnet-observability-lab/). It is the easiest way to navigate the current C4 views in a browser.
+
 ## Architecture
 
+- [Live interactive LikeC4 documentation](https://rodri-oliveira-dev.github.io/dotnet-observability-lab/)
 - [GitHub-rendered LikeC4 gallery — Context, Containers, four Component views and dynamic flow](architecture/rendered.md)
 - [Architecture overview, view navigation and the authoritative C4 model](architecture/README.md)
 - [Rendered PNGs and interactive static site — download from the architecture workflow](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/architecture-preview.yml)
