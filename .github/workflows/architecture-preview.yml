@@ -1,4 +1,4 @@
-name: Render LikeC4 architecture
+name: Render and publish LikeC4 architecture
 
 on:
   pull_request:
@@ -64,7 +64,7 @@ jobs:
         run: npm exec -- likec4 export png --flat -o dist/architecture-previews docs/architecture
       - name: Check view images and site assets
         run: python3 scripts/check_architecture_exports.py
-      - name: Publish view images and navigable static site as a PR artifact
+      - name: Publish view images and navigable static site as a workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: likec4-rendered-architecture
@@ -73,3 +73,25 @@ jobs:
             dist/architecture-previews/
           if-no-files-found: error
           retention-days: 14
+      - name: Upload GitHub Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist/architecture/
+
+  deploy:
+    name: Deploy GitHub Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: render
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
