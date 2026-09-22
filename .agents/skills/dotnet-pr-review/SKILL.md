@@ -1,6 +1,6 @@
 ---
 name: dotnet-pr-review
-description: Use esta skill para revisar um Pull Request ou diff de aplicação .NET com foco em corretude, regressões, compatibilidade, testes, performance, segurança e manutenção. Não use para implementar mudanças no PR sem solicitação explícita.
+description: Use esta skill para revisar um Pull Request ou diff de biblioteca .NET com foco em corretude, regressões, compatibilidade, testes, performance, segurança e manutenção. Não use para implementar mudanças no PR sem solicitação explícita.
 license: MIT
 ---
 
@@ -13,17 +13,17 @@ Revisar alterações com foco em risco real e comportamento observável, produzi
 1. Leia `AGENTS.md`, a descrição do PR e a issue relacionada quando disponível.
 2. Entenda o objetivo e o comportamento esperado antes de avaliar a implementação.
 3. Revise primeiro o diff; expanda arquivos completos apenas quando o contexto do trecho for insuficiente.
-4. Avalie riscos em corretude, contrato HTTP/eventos públicos/compatibilidade, concorrência/estado, performance/I/O, segurança, dependências, testes, CI, fronteiras de dados/mensageria e manutenção.
+4. Avalie riscos em corretude, API pública/compatibilidade, concorrência/estado, performance/I/O, segurança, dependências, testes, CI/packaging/release e manutenção.
 5. Delegue inventário do diff, busca de referências e localização de testes quando houver workers/subagentes; mantenha severidade e conclusão no agente principal.
 6. Para cada problema, confirme que ele é introduzido ou materialmente agravado pelo diff e descreva um cenário concreto de falha.
 7. Verifique se os testes protegem o novo comportamento e se quality gates foram preservados.
 8. Execute validações direcionadas e a baseline de `AGENTS.md` quando o ambiente permitir.
-9. Revise o conjunto final para detectar escopo acidental, dependência não explicada ou mudança de contrato HTTP/eventos sem documentação ou atualização do modelo arquitetural.
+9. Revise o conjunto final para detectar escopo acidental, dependência não explicada ou mudança pública sem documentação/changelog.
 
 # Severidade
 
-- **P0 — Blocker:** perda de dados, falha crítica de segurança, perda de integridade de eventos ou quebra ampla inevitável.
-- **P1 — High:** bug funcional provável, breaking change não intencional, falha de concorrência, vulnerabilidade relevante ou quebra de isolamento entre os serviços.
+- **P0 — Blocker:** perda de dados, falha crítica de segurança, pacote inutilizável ou quebra ampla inevitável.
+- **P1 — High:** bug funcional provável, breaking change não intencional, falha de concorrência, vulnerabilidade relevante ou release incorreto.
 - **P2 — Medium:** defeito real em cenário limitado, teste insuficiente para comportamento relevante ou risco significativo de manutenção/performance.
 - **P3 — Low:** melhoria objetiva que não bloqueia o merge por si só.
 

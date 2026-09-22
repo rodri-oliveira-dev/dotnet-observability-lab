@@ -1,6 +1,6 @@
 ---
 name: dotnet-security-review
-description: Use esta skill para revisar código, dependências, configuração e automação de um serviço .NET sob a ótica de segurança. Combine revisão semântica com analyzers e scanners existentes; não trate esta skill como substituta de CodeQL, Dependency Review, NuGet Audit ou outros gates determinísticos.
+description: Use esta skill para revisar código, dependências, configuração e automação de uma biblioteca .NET sob a ótica de segurança. Combine revisão semântica com analyzers e scanners existentes; não trate esta skill como substituta de CodeQL, Dependency Review, NuGet Audit ou outros gates determinísticos.
 license: MIT
 ---
 
@@ -18,11 +18,11 @@ Identificar riscos de segurança relevantes sem gerar ruído excessivo, preserva
 # Processo
 
 1. Leia `AGENTS.md`, o objetivo da mudança e o diff/arquivos relacionados.
-2. Identifique superfícies expostas: contrato HTTP/eventos públicos, entradas externas, arquivos/paths, serialização, comandos/processos, rede, secrets, workflows e dependências.
+2. Identifique superfícies expostas: API pública, entradas externas, arquivos/paths, serialização, comandos/processos, rede, secrets, workflows e dependências.
 3. Pesquise referências antes de expandir arquivos grandes.
 4. Delegue somente inventário e busca mecânica quando houver workers/subagentes; mantenha a avaliação final de risco no agente principal.
 5. Avalie somente categorias aplicáveis ao código real.
-6. Verifique os workflows efetivamente presentes e preserve NuGet Audit, CodeQL para C# e Dependency Review em pull requests. Não trate execução do CodeQL como bloqueio automático de merge sem comprovar as regras de proteção do repositório.
+6. Confirme que analyzers, CodeQL, Dependency Review, NuGet Audit e demais gates relevantes permanecem habilitados.
 7. Para cada risco, descreva pré-condição, vetor, impacto, evidência e mitigação.
 8. Se houver correção, prefira eliminar a causa em vez de adicionar bypass ou suppression ampla.
 9. Execute a baseline definida em `AGENTS.md` e scanners disponíveis quando o ambiente permitir.
