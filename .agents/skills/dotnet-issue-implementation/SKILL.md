@@ -25,10 +25,9 @@ Executar uma issue de ponta a ponta sem ampliar escopo, preservando contrato pú
 
 Combine quando necessário com:
 
-- `dotnet-library-change` para mudança funcional/técnica;
 - `dotnet-refactoring-engineer` para refatoração preservando comportamento;
 - `coverage-analysis` ou `test-anti-patterns` para riscos de teste;
-- `ci-release-governance` para CI, packaging ou release;
+- `ci-workflow-governance` para alterações no CI e em workflows existentes;
 - `dotnet-security-review` para superfície de segurança relevante.
 
 # Restrições específicas
