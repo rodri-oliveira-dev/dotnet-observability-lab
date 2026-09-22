@@ -1,6 +1,6 @@
 ---
 name: dotnet-bug-investigation
-description: Use esta skill para investigar bugs, regressões, falhas de teste ou comportamento inesperado em um serviço .NET quando a causa ainda não é conhecida. Priorize evidência, reprodução e teste de regressão antes da correção. Não use para feature nova com requisitos já definidos.
+description: Use esta skill para investigar bugs, regressões, falhas de teste ou comportamento inesperado em uma biblioteca .NET quando a causa ainda não é conhecida. Priorize evidência, reprodução e teste de regressão antes da correção. Não use para feature nova com requisitos já definidos.
 license: MIT
 ---
 
