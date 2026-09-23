@@ -32,7 +32,7 @@ Identificar riscos de segurança relevantes sem gerar ruído excessivo, preserva
 
 Considere quando aplicável: validação/normalização de entrada, path traversal, command injection, serialização insegura, reflexão/carregamento dinâmico, exposição de dados sensíveis, criptografia/aleatoriedade, SSRF/rede, XML/XXE, ReDoS, limites exploráveis, dependências vulneráveis e supply chain de GitHub Actions.
 
-Para workflows/release, combine com `ci-workflow-governance` e confirme permissões mínimas, actions pinadas por SHA, checkout read-only quando possível, ausência de credenciais persistentes, uso adequado de OIDC e falha fechada antes de publicação.
+Para workflows/release, combine com `ci-release-governance` e confirme permissões mínimas, actions pinadas por SHA, checkout read-only quando possível, ausência de credenciais persistentes, uso adequado de OIDC e falha fechada antes de publicação.
 
 # Findings
 
