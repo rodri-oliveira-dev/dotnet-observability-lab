@@ -35,6 +35,16 @@ operator cannot reproduce it.
 2. Record `dotnet --version`, `aspire --version`, `docker version`, `python --version`,
    `psql --version` and `git --version`. The `psql` executable must be on `PATH`
    because the evidence runner invokes it by name.
+   On native Windows with Rancher Desktop, if Testcontainers cannot initialize
+   its Resource Reaper or connects to an incorrect published port, create
+   `%USERPROFILE%\.testcontainers.properties` with the canonical named-pipe
+   endpoint below, then rerun one integration-test project. Keep the Resource
+   Reaper enabled.
+
+   ```properties
+   docker.host=npipe://./pipe/docker_engine
+   ```
+
 3. Run `dotnet tool restore` and `dotnet restore ./DotNetObservabilityLab.slnx`.
 4. Confirm the Docker/OCI daemon responds, then start the AppHost as documented in
    the root README and wait for every required resource to report healthy.
