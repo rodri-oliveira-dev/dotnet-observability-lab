@@ -6,6 +6,8 @@ Keep changes small, reproducible, and proportional to this lab's purpose.
 
 ## Environment
 
+- Visual Studio Code users can open `dotnet-observability-lab.code-workspace` and
+  run `Workspace: Bootstrap`; see `docs/workspace.md` for external prerequisites.
 - Use the .NET SDK defined by `global.json`.
 - Restore repository-local tools with `dotnet tool restore`.
 - Use Node.js 20+ and install architecture tooling with `npm ci`.

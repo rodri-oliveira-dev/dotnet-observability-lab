@@ -46,6 +46,7 @@ builder.AddProject<Projects.Ingestion_Api>("ingestion-api")
     .WithEnvironment("ConnectionStrings__ingestion-db", ingestionConnectionString)
     .WithReference(redis)
     .WaitFor(ingestionDatabase)
+    .WithHttpEndpoint()
     .WithExternalHttpEndpoints();
 
 builder.AddProject<Projects.Ingestion_Outbox_Worker>("ingestion-outbox-worker")
@@ -57,6 +58,7 @@ builder.AddProject<Projects.Ingestion_Outbox_Worker>("ingestion-outbox-worker")
 builder.AddProject<Projects.Consolidation_Api>("consolidation-api")
     .WithEnvironment("ConnectionStrings__consolidation-db", consolidationConnectionString)
     .WaitFor(consolidationDatabase)
+    .WithHttpEndpoint()
     .WithExternalHttpEndpoints();
 
 builder.AddProject<Projects.Consolidation_Worker>("consolidation-worker")

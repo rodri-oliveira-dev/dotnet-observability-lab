@@ -9,7 +9,7 @@ tracks the still-unexecuted six-scenario verification. [Roadmap #13](https://git
 may be closed for delivered implementation/documentation, but this runtime verification
 must remain explicitly **pending** until actual evidence exists.
 
-## Attempt and environment
+## Historical blocked attempt
 
 - Attempt date: 2026-09-20.
 - Source reviewed: `main` at `d3c56f238bc2e350f170709d8065ffcb0d391235`.
@@ -20,6 +20,46 @@ must remain explicitly **pending** until actual evidence exists.
   replay, trace, log, or metric has been observed for the six live scenarios.
 - Existing GitHub Actions build/tests/coverage and architecture gates are separate
   automated evidence; they must not be substituted for runtime observations.
+
+This historical record is retained to explain why the status is still pending; it is
+not a statement about the current operator machine. Every new execution must record
+its own preflight, commit and versions before collecting scenario evidence.
+
+## First-time operator gate
+
+Run this gate from a clean checkout of the exact commit that will be tested. Do not
+collect acceptance evidence from an uncommitted working tree because another
+operator cannot reproduce it.
+
+1. Record `git rev-parse HEAD` and confirm `git status --short` is empty.
+2. Record `dotnet --version`, `aspire --version`, `docker version`, `python --version`,
+   `psql --version` and `git --version`. The `psql` executable must be on `PATH`
+   because the evidence runner invokes it by name.
+   On native Windows with Rancher Desktop, if Testcontainers cannot initialize
+   its Resource Reaper or connects to an incorrect published port, create
+   `%USERPROFILE%\.testcontainers.properties` with the canonical named-pipe
+   endpoint below, then rerun one integration-test project. Keep the Resource
+   Reaper enabled.
+
+   ```properties
+   docker.host=npipe://./pipe/docker_engine
+   ```
+
+3. Run `dotnet tool restore` and `dotnet restore ./DotNetObservabilityLab.slnx`.
+4. Confirm the Docker/OCI daemon responds, then start the AppHost as documented in
+   the root README and wait for every required resource to report healthy.
+5. Prove that the API, PostgreSQL, RabbitMQ and Redis endpoints resolve only to
+   `localhost`, `127.0.0.1` or `::1`. Confirm that both databases belong to the
+   disposable lab and contain no real data. Merely setting
+   `ASPIRE_DISPOSABLE_LAB=I_UNDERSTAND` is an acknowledgement, not proof.
+6. Confirm `ingestion_db` is accessed as `ingestion_app` and `consolidation_db` as
+   `consolidation_app`; never use the PostgreSQL administrator in evidence probes.
+7. Open the Dashboard and confirm that a read-only API probe produces a trace,
+   correlated structured logs and metrics. This is preflight evidence only and
+   must not be marked as a scenario PASS.
+
+Stop if the commit is not reproducible, an endpoint is remote, the database is not
+disposable, a credential could be written to evidence, or cleanup cannot be assured.
 
 ## Executable HTTP smoke (optional, not a substitute for six scenarios)
 
@@ -90,6 +130,64 @@ python3 scripts/runtime_evidence.py --scenario 5 --output /tmp/aspire-scenario-5
 python3 scripts/runtime_evidence.py --scenario 6 --output /tmp/aspire-scenario-6.json
 ```
 
+On Windows, use a private PowerShell session. The following bootstrap discovers
+the current Aspire proxy endpoints, retrieves secrets without printing them and
+URL-encodes database passwords. Do not paste the resulting environment variables
+into logs, issue comments or evidence files.
+
+```powershell
+$appHost = './src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj'
+$resources = (aspire describe --format Json --non-interactive --nologo | ConvertFrom-Json).resources
+
+function Get-AspireUrl([string] $resourcePrefix, [string] $scheme) {
+    $resource = $resources |
+        Where-Object {
+            $_.name -like "$resourcePrefix*" -and
+            $_.urls.url -like "${scheme}://*"
+        } |
+        Select-Object -First 1
+    if (-not $resource) { throw "Aspire resource not found: $resourcePrefix" }
+
+    $url = $resource.urls.url |
+        Where-Object { $_ -like "${scheme}://*" } |
+        Select-Object -First 1
+    if (-not $url) { throw "Endpoint $scheme not found for $resourcePrefix" }
+    return $url
+}
+
+$env:ASPIRE_DISPOSABLE_LAB = 'I_UNDERSTAND'
+$env:INGESTION_API_URL = Get-AspireUrl 'ingestion-api-' 'http'
+$env:CONSOLIDATION_API_URL = Get-AspireUrl 'consolidation-api-' 'http'
+$postgresEndpoint = [Uri](Get-AspireUrl 'postgres-' 'tcp')
+$env:RABBITMQ_MANAGEMENT_URL = Get-AspireUrl 'rabbitmq-' 'http'
+
+$ingestionPassword = (aspire secret get 'Parameters:ingestion-db-password' --apphost $appHost --non-interactive --nologo).Trim()
+$consolidationPassword = (aspire secret get 'Parameters:consolidation-db-password' --apphost $appHost --non-interactive --nologo).Trim()
+$env:RABBITMQ_USERNAME = (aspire secret get 'Parameters:rabbitmq-username' --apphost $appHost --non-interactive --nologo).Trim()
+$env:RABBITMQ_PASSWORD = (aspire secret get 'Parameters:rabbitmq-password' --apphost $appHost --non-interactive --nologo).Trim()
+
+$ingestionPassword = [Uri]::EscapeDataString($ingestionPassword)
+$consolidationPassword = [Uri]::EscapeDataString($consolidationPassword)
+$env:INGESTION_PGURI = "postgresql://ingestion_app:${ingestionPassword}@$($postgresEndpoint.Host):$($postgresEndpoint.Port)/ingestion_db"
+$env:CONSOLIDATION_PGURI = "postgresql://consolidation_app:${consolidationPassword}@$($postgresEndpoint.Host):$($postgresEndpoint.Port)/consolidation_db"
+
+# Example when the Windows installer did not add psql to PATH; adjust the version if needed:
+# $env:Path = "C:\Program Files\PostgreSQL\18\bin;$env:Path"
+if (-not (Get-Command psql -ErrorAction SilentlyContinue)) {
+    throw 'psql is not on PATH; add the PostgreSQL bin directory to this private shell'
+}
+```
+
+Keep local output under the already ignored `artifacts/` directory. Use a new file
+for every attempt because the runner deliberately refuses to overwrite evidence:
+
+```powershell
+$stamp = Get-Date -AsUTC -Format 'yyyyMMddTHHmmssZ'
+python scripts/runtime_evidence.py --scenario 1 --output "artifacts/runtime-evidence/scenario-1/$stamp.json"
+```
+
+Close the private shell after the run to discard its credential-bearing environment.
+
 Each command is **opt-in and independent**; do not run the six at once.
 Run scenario 1 first to create the aggregate, then 2–3 before 4–6. Scenario
 3 needs RabbitMQ Management enabled and routes two copies of the persisted
@@ -115,6 +213,26 @@ authentication headers or unreviewed screenshots.
 manual record using the template below with real Dashboard trace/log/metric
 IDs and observed values, action timestamps, and cleanup evidence. A JSON
 `PARTIAL_EVIDENCE` result is not PASS and must not close issue #40.
+
+### Dashboard evidence workflow
+
+Record the UTC time immediately before and after every HTTP or operator action.
+Use the Dashboard resource and time filters to find the matching operation, then
+copy the full trace ID rather than transcribing its shortened display value. The
+CLI can help enumerate traces, spans and structured logs without inventing IDs:
+
+```bash
+aspire otel traces ingestion-api --format Table --limit 20 --non-interactive --nologo
+aspire otel spans ingestion-api --format Table --limit 50 --non-interactive --nologo
+aspire otel logs ingestion-api --format Table --limit 50 --non-interactive --nologo
+```
+
+Repeat with `ingestion-outbox-worker`, `consolidation-worker` and
+`consolidation-api` as applicable. For each trace, record span name, resource,
+status, parent or link relationship and correlation ID. Metrics must be inspected
+in the Dashboard: record the instrument name, resource, bounded tags, observed
+value and observation time. Preserve only reviewed screenshots. Missing telemetry
+is a recorded gap, never an inferred PASS.
 
 ## Live evidence collection (complete all six before checking off #32)
 

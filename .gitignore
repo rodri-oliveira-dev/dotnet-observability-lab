@@ -21,6 +21,8 @@ coverage/
 coverage.*
 *.coverage
 *.coveragexml
+__pycache__/
+*.py[cod]
 
 # Aspire local state
 .aspire/
