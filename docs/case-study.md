@@ -172,7 +172,7 @@ Relevant code and tests: [ServiceDefaults](../src/DotNetObservabilityLab.Service
 
 ### Structured logs
 
-The handlers/workers emit named, structured events for outcomes such as accepted/replayed/conflicting idempotency requests, publication failures, applied messages, and duplicates. The runbook tells operators which log events to inspect for each scenario instead of relying on free-text console output.
+The handlers/workers emit named, structured events for outcomes such as replayed/conflicting idempotency requests, publication failures, applied messages, and duplicates. Newly accepted ingestion requests are represented by the `lab.ingestion.values.accepted` metric and the `ingestion.accept_value` span rather than a dedicated named structured log event. The runbook tells operators which signals to inspect for each scenario instead of relying on free-text console output.
 
 ### Metrics
 
