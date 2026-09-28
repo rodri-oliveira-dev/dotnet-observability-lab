@@ -113,6 +113,9 @@
           "Release",
           "--no-build"
         ],
+        "dependsOn": [
+          "Workspace: Build Release"
+        ],
         "options": {
           "cwd": "${workspaceFolder}"
         },
