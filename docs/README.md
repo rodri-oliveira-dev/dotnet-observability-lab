@@ -4,6 +4,10 @@ This directory is the entry point for detailed project documentation. Start with
 
 **Live interactive architecture documentation:** [open the published LikeC4 site](https://rodri-oliveira-dev.github.io/dotnet-observability-lab/). It is the easiest way to navigate the current C4 views in a browser.
 
+## Architectural case study
+
+- **[Complete architectural case study](case-study.md)** — problem, constraints, quality attributes, decisions and trade-offs, nominal flow, failure modes, observability, traceability matrix, and deliberate production limitations. It links to the authoritative LikeC4 model instead of duplicating diagrams.
+
 ## Architecture
 
 - [Live interactive LikeC4 documentation](https://rodri-oliveira-dev.github.io/dotnet-observability-lab/)
