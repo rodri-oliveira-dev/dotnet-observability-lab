@@ -27,6 +27,8 @@ As duas APIs **nunca chamam uma à outra**. Um único recurso PostgreSQL local h
 
 Instale o SDK definido em [global.json](global.json) (.NET 10), uma CLI do Aspire compatível com o AppHost e um mecanismo Docker/OCI em execução. O Node.js 20+ é necessário para as ferramentas de arquitetura e CI, mas **não** para executar o AppHost. Na primeira inicialização de um ambiente local novo, configure os cinco parâmetros secretos persistentes abaixo uma única vez (escolha senhas fortes e não as inclua no repositório):
 
+Quem utiliza Visual Studio Code pode abrir o [workspace versionado](dotnet-observability-lab.code-workspace) e executar `Workspace: Bootstrap` para restaurar as dependências .NET e Node gerenciadas pelo repositório. Consulte o [guia de configuração do workspace](docs/workspace.md) para distinguir o que é restaurado automaticamente das ferramentas externas que precisam ser instaladas na máquina.
+
 ```bash
 aspire secret set Parameters:postgres-password YOUR_ADMIN_PASSWORD --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj
 aspire secret set Parameters:ingestion-db-password YOUR_INGESTION_PASSWORD --apphost ./src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj

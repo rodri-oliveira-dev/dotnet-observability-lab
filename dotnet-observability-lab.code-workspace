@@ -1,0 +1,170 @@
+{
+  "folders": [
+    {
+      "name": "dotnet-observability-lab",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "dotnet.defaultSolution": "DotNetObservabilityLab.slnx",
+    "files.exclude": {
+      "**/bin": true,
+      "**/obj": true,
+      "dist": true,
+      "node_modules": true,
+      "TestResults": true
+    },
+    "search.exclude": {
+      "**/bin": true,
+      "**/obj": true,
+      "dist": true,
+      "node_modules": true,
+      "TestResults": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-dotnettools.csdevkit",
+      "ms-azuretools.vscode-containers"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Workspace: Restore .NET tools",
+        "type": "process",
+        "command": "dotnet",
+        "args": [
+          "tool",
+          "restore"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Workspace: Restore .NET dependencies",
+        "type": "process",
+        "command": "dotnet",
+        "args": [
+          "restore",
+          "${workspaceFolder}/DotNetObservabilityLab.slnx"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "problemMatcher": "$msCompile"
+      },
+      {
+        "label": "Workspace: Install Node dependencies",
+        "type": "process",
+        "command": "npm",
+        "windows": {
+          "command": "npm.cmd"
+        },
+        "args": [
+          "ci"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Workspace: Bootstrap",
+        "dependsOrder": "sequence",
+        "dependsOn": [
+          "Workspace: Restore .NET tools",
+          "Workspace: Restore .NET dependencies",
+          "Workspace: Install Node dependencies"
+        ],
+        "problemMatcher": []
+      },
+      {
+        "label": "Workspace: Build Release",
+        "type": "process",
+        "command": "dotnet",
+        "args": [
+          "build",
+          "${workspaceFolder}/DotNetObservabilityLab.slnx",
+          "--configuration",
+          "Release",
+          "--no-restore"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "problemMatcher": "$msCompile"
+      },
+      {
+        "label": "Workspace: Test Release",
+        "type": "process",
+        "command": "dotnet",
+        "args": [
+          "test",
+          "${workspaceFolder}/DotNetObservabilityLab.slnx",
+          "--configuration",
+          "Release",
+          "--no-build"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "group": "test",
+        "problemMatcher": "$msCompile"
+      },
+      {
+        "label": "Workspace: Validate ADRs",
+        "type": "process",
+        "command": "dotnet",
+        "args": [
+          "tool",
+          "run",
+          "adr-guard",
+          "check",
+          "docs/adr"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Workspace: Validate architecture",
+        "type": "process",
+        "command": "npm",
+        "windows": {
+          "command": "npm.cmd"
+        },
+        "args": [
+          "run",
+          "architecture:validate"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Workspace: Run Aspire",
+        "type": "process",
+        "command": "aspire",
+        "args": [
+          "run",
+          "--project",
+          "${workspaceFolder}/src/DotNetObservabilityLab.AppHost/DotNetObservabilityLab.AppHost.csproj"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "problemMatcher": []
+      }
+    ]
+  }
+}

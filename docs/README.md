@@ -18,6 +18,10 @@ This directory is the entry point for detailed project documentation. Start with
 - [Versioned integration event: ValueReceived.v1](events/ValueReceived.v1.md)
 - [Six reproducible resilience and observability scenarios](scenarios.md)
 
+## Development environment
+
+- [Visual Studio Code workspace, managed dependency bootstrap and external prerequisites](workspace.md)
+
 The repository intentionally separates **current architecture documentation** from **historical architectural decisions**:
 
 - LikeC4 describes the architecture that should match the current implementation.
