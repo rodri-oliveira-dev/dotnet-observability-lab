@@ -21,7 +21,7 @@ As duas APIs **nunca chamam uma à outra**. Um único recurso PostgreSQL local h
 
 ## Estudo de caso arquitetural
 
-**[Acompanhe o estudo completo de problema → restrições → decisões → falhas → observabilidade → evidências](docs/case-study.md).** Ele conecta o fluxo implementado de Outbox/Inbox, semântica at-least-once, responsabilidades de PostgreSQL/Redis, visões LikeC4, ADRs, testes, cenários de falha e evidências da CI em uma narrativa arquitetural navegável, sem duplicar o modelo LikeC4.
+**[Acompanhe o estudo completo de problema → restrições → decisões → falhas → observabilidade → evidências](docs/case-study.pt-BR.md).** Ele conecta o fluxo implementado de Outbox/Inbox, semântica at-least-once, responsabilidades de PostgreSQL/Redis, visões LikeC4, ADRs, testes, cenários de falha e evidências da CI em uma narrativa arquitetural navegável, sem duplicar o modelo LikeC4.
 
 ## Pré-requisitos e inicialização
 
