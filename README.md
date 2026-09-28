@@ -19,6 +19,10 @@ The [LikeC4 architecture model and view index](docs/architecture/README.md) are 
 
 The two APIs **never call each other**. A single local PostgreSQL resource hosts two separate logical databases (`ingestion_db` and `consolidation_db`), each with its own non-superuser owner/credentials. Redis is an optional, best-effort HTTP idempotency shortcut in `Ingestion.Api`; PostgreSQL remains authoritative for both HTTP idempotency and consumer deduplication. Although Aspire provisions a Redis reference for `Consolidation.Worker`, the worker makes no Redis lookup: it atomically records the Inbox message ID and updates the aggregate in `consolidation_db`. Only the two workers connect to RabbitMQ; delivery is at-least-once, and the PostgreSQL Inbox makes its **business effect idempotent**, not its transport exactly-once. Aspire starts local processes/resources and displays OpenTelemetry data; it does **not** route business traffic. See [C4 Levels 1–3 and the dynamic flow](docs/architecture/README.md), the [event contract](docs/events/ValueReceived.v1.md), and [architectural decisions](docs/adr/README.md).
 
+## Architectural case study
+
+**[Follow the complete problem → constraints → decisions → failures → observability → evidence case study](docs/case-study.md).** It ties the implemented Outbox/Inbox flow, at-least-once semantics, PostgreSQL/Redis responsibilities, LikeC4 views, ADRs, tests, failure scenarios, and CI evidence into one navigable architectural narrative without duplicating the LikeC4 model.
+
 ## Prerequisites and start
 
 Install the SDK pinned in [global.json](global.json) (.NET 10), an Aspire CLI compatible with the AppHost, and a running Docker/OCI-compatible engine. Node.js 20+ is needed for the architecture/CI tooling but **not** to run the AppHost. To initialize a fresh local environment, set five persistent secrets once (choose your own strong values; do not commit them):
