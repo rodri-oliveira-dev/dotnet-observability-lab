@@ -1,3 +1,5 @@
+[**English — current language**](case-study.md) | [Português (Brasil)](case-study.pt-BR.md)
+
 # Architectural case study: reliable asynchronous processing with observable evidence
 
 This page is the canonical architectural case study for the lab. It connects the implemented problem, constraints, quality attributes, decisions, failure modes, observability signals, and repository evidence without creating a second architecture model.
@@ -6,7 +8,7 @@ This page is the canonical architectural case study for the lab. It connects the
 
 ## Language strategy
 
-Detailed technical documentation under `docs/` is canonical in English. The root [English README](../README.md) and [Português (Brasil) README](../README.pt-BR.md) provide equivalent project-level facts and both link to this case study. When a fact is repeated in both root READMEs, the two versions must remain factually equivalent; this case study is not duplicated solely for translation.
+Detailed technical documentation under `docs/` remains canonical in English. The root [English README](../README.md) links to this canonical English case study, while the [Português (Brasil) README](../README.pt-BR.md) links to the equivalent [Portuguese translation](case-study.pt-BR.md). When the two case-study versions differ, this English version is the factual reference.
 
 ## 1. Problem
 
