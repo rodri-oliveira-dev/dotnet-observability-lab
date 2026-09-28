@@ -4,7 +4,7 @@ This runbook exercises the **implemented** four-process lab against a disposable
 
 ## Verification evidence and optional automation
 
-The [live verification report](runtime-verification.md) records the current execution blocker and provides an evidence checklist for all six scenarios. **The scenarios below are procedures and expected signals, not evidence of a successful live Aspire run.** After starting a disposable environment, `python3 scripts/runtime_http_smoke.py --output /tmp/lab-http-evidence.json` can check HTTP statuses, receipt identity and asynchronous read-model count/sum deltas for the first two scenarios. It does not check database rows, RabbitMQ message metadata, Dashboard signals or outage/fault scenarios; record those separately using the linked report.
+The [live verification report](runtime-verification.md) retains the historical blocker and provides a first-time operator gate plus an evidence checklist for all six scenarios. **The scenarios below are procedures and expected signals, not evidence of a successful live Aspire run.** After starting a disposable environment, `python3 scripts/runtime_http_smoke.py --output /tmp/lab-http-evidence.json` can check HTTP statuses, receipt identity and asynchronous read-model count/sum deltas for the first two scenarios. It does not check database rows, RabbitMQ message metadata, Dashboard signals or outage/fault scenarios; record those separately using the linked report.
 
 For **live evidence collection** of all six cases, use the [opt-in local evidence runner and its exact prerequisite/checkpoint instructions](runtime-verification.md#guided-live-evidence-collector-issue-40). It captures actual HTTP and application-role PostgreSQL before/after states, can replay the original AMQP MessageId twice, and guides manual outage/fault checkpoints. It does not scrape or fabricate Aspire Dashboard traces/logs/metrics, and its output remains partial evidence until the operator attaches observed telemetry and cleanup records. Never run the fault-injection cases against non-disposable data.
 
@@ -17,6 +17,13 @@ export INGESTION_API_URL='http://localhost:PORT_FROM_ASPIRE'
 export CONSOLIDATION_API_URL='http://localhost:OTHER_PORT_FROM_ASPIRE'
 export DEMO_KEY="lab-$(date +%s)-$$"
 ```
+
+Windows operators should use the endpoint and credential bootstrap in the
+[first-time operator instructions](runtime-verification.md#first-time-operator-gate),
+then set `$env:DEMO_KEY = "lab-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())-$PID"`.
+Store generated evidence below `artifacts/runtime-evidence/`, not beside source
+files. The entire `artifacts/` directory is ignored by Git, but every file must
+still be reviewed and redacted before it is shared.
 
 Use curl, a SQL client connected as `ingestion_app` to `ingestion_db` and as `consolidation_app` to `consolidation_db`, and the RabbitMQ management UI linked from the Aspire `rabbitmq` resource. The application-role passwords were configured at startup; never use one role to query the other database. For a local `psql` client, e.g. `PGPASSWORD="$INGESTION_PASSWORD" psql -h HOST_FROM_ASPIRE -p PORT_FROM_ASPIRE -U ingestion_app -d ingestion_db`, obtaining the PostgreSQL host/port from Aspire's resource endpoints; repeat with `consolidation_app` for its database. These URLs and ports vary with the local runtime. Run the following inspections **against their respective databases**:
 
@@ -86,7 +93,28 @@ Only on a **disposable local** `consolidation_db`. No production feature flags o
 
 **Slow processing:** open a dedicated SQL session A and run the checked-in [lock script](../scripts/demo/hold-consolidation-lock.sql). Leave session A open **inside its transaction**. POST a *new* key/value using the scenario 1 curl template. The consumer can insert its Inbox row but blocks on the locked aggregate row (the entire transaction remains uncommitted, so there is no durable half-write). In Aspire Traces, observe the long `consolidation.process_value` span, and in Metrics the elevated `lab.consolidation.processing.duration` *after it finishes*. Check Structured Logs for the eventual committed event. Return to session A and execute `COMMIT;` to release the lock; verify that the GET advances once, not twice. Do not leave the transaction open after the demo.
 
-**Error processing:** run [enable-failure.sql](../scripts/demo/enable-consolidation-failure.sql) once on the same disposable database, then POST a new key/value. The injected CHECK constraint makes the worker's aggregate UPSERT fail; the whole Inbox/aggregate transaction rolls back and the broker delivery is nacked/requeued. Inspect the consumer span's **error** status, `Consolidation failed; delivery requeued` in Structured Logs, and `lab.consolidation.processing.duration{result=failed}` in Metrics. `GET /consolidated` still serves the **previous** persisted snapshot. **Always restore immediately:** run [disable-failure.sql](../scripts/demo/disable-consolidation-failure.sql), then allow/restart the consumer to process the queued event. Check that the read model advances once and the Inbox contains just one row for this MessageId. The repeated nacks while the constraint is active can create a tight retry loop; keep the injected failure brief and stop `consolidation-worker` if necessary to perform cleanup. These scripts must never be run against real data.
+**Error processing:** run [enable-consolidation-failure.sql](../scripts/demo/enable-consolidation-failure.sql) once on the same disposable database, then POST a new key/value. The injected CHECK constraint makes the worker's aggregate UPSERT fail; the whole Inbox/aggregate transaction rolls back and the broker delivery is nacked/requeued. Inspect the consumer span's **error** status, `Consolidation failed; delivery requeued` in Structured Logs, and `lab.consolidation.processing.duration{result=failed}` in Metrics. `GET /consolidated` still serves the **previous** persisted snapshot. **Always restore immediately:** run [disable-consolidation-failure.sql](../scripts/demo/disable-consolidation-failure.sql), then allow/restart the consumer to process the queued event. Check that the read model advances once and the Inbox contains just one row for this MessageId. The repeated nacks while the constraint is active can create a tight retry loop; keep the injected failure brief and stop `consolidation-worker` if necessary to perform cleanup. These scripts must never be run against real data.
+
+After either `COMMIT` or `ROLLBACK` in session A and after running the disable
+script, execute the following as `consolidation_app` in `consolidation_db`. Both
+counts must be zero before scenario 6 can pass:
+
+```sql
+SELECT count(*) AS demo_constraints
+FROM pg_constraint
+WHERE conrelid = 'consolidated_totals'::regclass
+  AND conname = 'demo_reject_consolidation_updates';
+
+SELECT count(*) AS waiting_locks
+FROM pg_locks l
+JOIN pg_database d ON d.oid = l.database
+WHERE d.datname = current_database()
+  AND l.granted = false;
+```
+
+Finally, confirm all Aspire resources are healthy and perform one normal accepted
+write. Record its single Inbox row and single aggregate increment as recovery
+evidence. Cleanup without these SQL results and the recovery operation is not PASS.
 
 ## Expected signal glossary
 

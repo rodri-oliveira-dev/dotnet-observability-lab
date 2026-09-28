@@ -58,6 +58,7 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
                 "CONSOLIDATION_API_URL": "http://localhost:5020",
             }
             with patch.dict("os.environ", env, clear=True), \
+                    patch.object(runner, "git_sha", return_value="test-sha"), \
                     patch.object(runner, "scenario1") as scenario:
                 exit_code = runner.main(["--scenario", "1", "--output", str(output)])
             scenario.assert_called_once()
@@ -77,6 +78,7 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             output = pathlib.Path(temp) / "evidence.json"
             with patch.dict("os.environ", {"ASPIRE_DISPOSABLE_LAB": "I_UNDERSTAND"}, clear=True), \
+                    patch.object(runner, "git_sha", return_value="test-sha"), \
                     patch.object(runner, "scenario2") as scenario:
                 exit_code = runner.main([
                     "--scenario", "2", "--ingestion-url", "http://127.0.0.1:6010",
@@ -95,6 +97,7 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             output = pathlib.Path(temp) / "evidence.json"
             with patch.dict("os.environ", {"ASPIRE_DISPOSABLE_LAB": "I_UNDERSTAND"}, clear=True), \
+                    patch.object(runner, "git_sha", return_value="test-sha"), \
                     patch.object(runner, "scenario1", side_effect=AttributeError("sensitive detail")):
                 exit_code = runner.main([
                     "--scenario", "1", "--ingestion-url", "http://localhost:5010",
