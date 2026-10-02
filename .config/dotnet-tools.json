@@ -15,6 +15,13 @@
         "adr-guard"
       ],
       "rollForward": false
+    },
+    "repo2c4.cli": {
+      "version": "1.1.0",
+      "commands": [
+        "repo2c4"
+      ],
+      "rollForward": false
     }
   }
 }
