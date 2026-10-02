@@ -90,10 +90,10 @@ jobs:
       - name: Generate and validate Repo2C4 preview
         run: |
           mkdir -p artifacts/repo2c4
-          repo2c4 inspect             --repository .             --output artifacts/repo2c4/snapshot.json
+          dotnet tool run repo2c4 -- inspect             --repository .             --output artifacts/repo2c4/snapshot.json
           python3 scripts/build-repo2c4-model.py             --snapshot artifacts/repo2c4/snapshot.json             --output artifacts/repo2c4/architecture.c2.v1.json
-          repo2c4 generate             --model artifacts/repo2c4/architecture.c2.v1.json             --output artifacts/repo2c4/generated             --apply
-          PATH="$PWD/node_modules/.bin:$PATH" repo2c4 validate             --output artifacts/repo2c4/generated
+          dotnet tool run repo2c4 -- generate             --model artifacts/repo2c4/architecture.c2.v1.json             --output artifacts/repo2c4/generated             --apply
+          PATH="$PWD/node_modules/.bin:$PATH" dotnet tool run repo2c4 -- validate             --output artifacts/repo2c4/generated
           npm exec -- likec4 build artifacts/repo2c4/generated             -o dist/repo2c4             --base ./
 
       - name: Publish current and Repo2C4 previews as a workflow artifact
@@ -151,10 +151,10 @@ jobs:
       - name: Generate validated Repo2C4 workspace
         run: |
           mkdir -p artifacts/repo2c4
-          repo2c4 inspect             --repository .             --output artifacts/repo2c4/snapshot.json
+          dotnet tool run repo2c4 -- inspect             --repository .             --output artifacts/repo2c4/snapshot.json
           python3 scripts/build-repo2c4-model.py             --snapshot artifacts/repo2c4/snapshot.json             --output artifacts/repo2c4/architecture.c2.v1.json
-          repo2c4 generate             --model artifacts/repo2c4/architecture.c2.v1.json             --output artifacts/repo2c4/generated             --apply
-          PATH="$PWD/node_modules/.bin:$PATH" repo2c4 validate             --output artifacts/repo2c4/generated
+          dotnet tool run repo2c4 -- generate             --model artifacts/repo2c4/architecture.c2.v1.json             --output artifacts/repo2c4/generated             --apply
+          PATH="$PWD/node_modules/.bin:$PATH" dotnet tool run repo2c4 -- validate             --output artifacts/repo2c4/generated
 
       - name: Build Repo2C4 preview under /repo2c4/
         run: |
