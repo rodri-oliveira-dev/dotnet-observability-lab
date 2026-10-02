@@ -104,7 +104,7 @@ jobs:
           PATH="$PWD/node_modules/.bin:$PATH" dotnet tool run repo2c4 -- validate \
             --output artifacts/repo2c4/generated
           npm exec -- likec4 build artifacts/repo2c4/generated \
-            -o dist/repo2c4 \
+            -o dist/repo2c4/c2 \
             --base ./
 
           generate_c3() {
@@ -128,6 +128,8 @@ jobs:
           generate_c3 el_ingestion_outbox_worker ingestion-outbox-worker
           generate_c3 el_consolidation_api consolidation-api
           generate_c3 el_consolidation_worker consolidation-worker
+
+          cp docs/architecture/repo2c4/index.html dist/repo2c4/index.html
 
       - name: Publish current and Repo2C4 previews as a workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -218,14 +220,14 @@ jobs:
           generate_c3 el_consolidation_api consolidation-api
           generate_c3 el_consolidation_worker consolidation-worker
 
-      - name: Build Repo2C4 C2 and C3 previews under /repo2c4/
+      - name: Build Repo2C4 navigation, C2 and C3 previews under /repo2c4/
         run: |
           BASE_PATH="${{ steps.pages.outputs.base_path || '/' }}"
           BASE_PATH="${BASE_PATH%/}"
 
           npm exec -- likec4 build artifacts/repo2c4/generated \
-            -o dist/pages/repo2c4 \
-            --base "${BASE_PATH}/repo2c4/"
+            -o dist/pages/repo2c4/c2 \
+            --base "${BASE_PATH}/repo2c4/c2/"
 
           build_c3() {
             slug="$1"
@@ -238,6 +240,14 @@ jobs:
           build_c3 ingestion-outbox-worker
           build_c3 consolidation-api
           build_c3 consolidation-worker
+
+          cp docs/architecture/repo2c4/index.html dist/pages/repo2c4/index.html
+
+          mkdir -p dist/pages/repo2c4/view/c1 dist/pages/repo2c4/view/c2
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=../../c2/view/c1/"><link rel="canonical" href="../../c2/view/c1/"><title>Redirecting</title><a href="../../c2/view/c1/">Open C1 preview</a>' \
+            > dist/pages/repo2c4/view/c1/index.html
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=../../c2/view/c2/"><link rel="canonical" href="../../c2/view/c2/"><title>Redirecting</title><a href="../../c2/view/c2/">Open C2 preview</a>' \
+            > dist/pages/repo2c4/view/c2/index.html
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
