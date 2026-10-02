@@ -11,6 +11,7 @@ This directory is the entry point for detailed project documentation. Start with
 ## Architecture
 
 - [Live interactive LikeC4 documentation](https://rodri-oliveira-dev.github.io/dotnet-observability-lab/)
+- [Repo2C4 migration preview](https://rodri-oliveira-dev.github.io/dotnet-observability-lab/repo2c4/) — parallel evidence-driven C2 preview; the current architecture remains authoritative during evaluation.
 - [GitHub-rendered LikeC4 gallery — Context, Containers, four Component views and dynamic flow](architecture/rendered.md)
 - [Architecture overview, view navigation and the authoritative C4 model](architecture/README.md)
 - [Rendered PNGs and interactive static site — download from the architecture workflow](https://github.com/rodri-oliveira-dev/dotnet-observability-lab/actions/workflows/architecture-preview.yml)
