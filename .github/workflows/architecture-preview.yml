@@ -4,24 +4,30 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - '.config/dotnet-tools.json'
       - 'docs/architecture/**'
       - 'README.md'
       - 'README.pt-BR.md'
       - 'docs/README.md'
+      - 'global.json'
       - 'package.json'
       - 'package-lock.json'
+      - 'scripts/build-repo2c4-model.py'
       - 'scripts/check_architecture_exports.py'
       - 'scripts/generate-architecture-markdown.sh'
       - '.github/workflows/architecture-preview.yml'
   push:
     branches: [main]
     paths:
+      - '.config/dotnet-tools.json'
       - 'docs/architecture/**'
       - 'README.md'
       - 'README.pt-BR.md'
       - 'docs/README.md'
+      - 'global.json'
       - 'package.json'
       - 'package-lock.json'
+      - 'scripts/build-repo2c4-model.py'
       - 'scripts/check_architecture_exports.py'
       - '.github/workflows/architecture-preview.yml'
   workflow_dispatch:
@@ -35,7 +41,7 @@ concurrency:
 
 jobs:
   render:
-    name: Build site and seven LikeC4 views
+    name: Build current architecture and Repo2C4 preview
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -43,34 +49,62 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+
       - name: Set up pinned Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: npm
+
       - name: Install locked architecture dependencies
         run: npm ci
+
       - name: Validate architecture source and formatting
         run: |
           npm run architecture:validate
           npm run architecture:format:check
+
       - name: Build relocatable LikeC4 site
         run: npm run architecture:build
+
       - name: Check GitHub-rendered Mermaid is synchronized with LikeC4
         run: bash scripts/generate-architecture-markdown.sh --check
+
       - name: Install browser for locked Playwright exporter
         run: npx playwright install --with-deps chromium
+
       - name: Export seven views from the same LikeC4 model
         run: npm exec -- likec4 export png --flat -o dist/architecture-previews docs/architecture
+
       - name: Check view images and site assets
         run: python3 scripts/check_architecture_exports.py
-      - name: Publish view images and navigable static site as a workflow artifact
+
+      - name: Set up .NET from global.json
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore pinned .NET tools
+        run: dotnet tool restore
+
+      - name: Generate and validate Repo2C4 preview
+        run: |
+          mkdir -p artifacts/repo2c4
+          repo2c4 inspect             --repository .             --output artifacts/repo2c4/snapshot.json
+          python3 scripts/build-repo2c4-model.py             --snapshot artifacts/repo2c4/snapshot.json             --output artifacts/repo2c4/architecture.c2.v1.json
+          repo2c4 generate             --model artifacts/repo2c4/architecture.c2.v1.json             --output artifacts/repo2c4/generated             --apply
+          PATH="$PWD/node_modules/.bin:$PATH" repo2c4 validate             --output artifacts/repo2c4/generated
+          npm exec -- likec4 build artifacts/repo2c4/generated             -o dist/repo2c4             --base ./
+
+      - name: Publish current and Repo2C4 previews as a workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: likec4-rendered-architecture
           path: |
             dist/architecture/
             dist/architecture-previews/
+            dist/repo2c4/
+            artifacts/repo2c4/generated/
           if-no-files-found: error
           retention-days: 14
 
@@ -79,7 +113,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: render
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       pages: read
@@ -88,21 +122,46 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+
       - name: Set up pinned Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: npm
+
       - name: Install locked architecture dependencies
         run: npm ci
+
+      - name: Set up .NET from global.json
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore pinned .NET tools
+        run: dotnet tool restore
+
       - name: Configure GitHub Pages
         id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - name: Build LikeC4 for GitHub Pages base path
+
+      - name: Build current LikeC4 site for GitHub Pages
         run: |
-          npm exec -- likec4 build docs/architecture \
-            -o dist/pages \
-            --base "${{ steps.pages.outputs.base_path || '/' }}"
+          npm exec -- likec4 build docs/architecture             -o dist/pages             --base "${{ steps.pages.outputs.base_path || '/' }}"
+
+      - name: Generate validated Repo2C4 workspace
+        run: |
+          mkdir -p artifacts/repo2c4
+          repo2c4 inspect             --repository .             --output artifacts/repo2c4/snapshot.json
+          python3 scripts/build-repo2c4-model.py             --snapshot artifacts/repo2c4/snapshot.json             --output artifacts/repo2c4/architecture.c2.v1.json
+          repo2c4 generate             --model artifacts/repo2c4/architecture.c2.v1.json             --output artifacts/repo2c4/generated             --apply
+          PATH="$PWD/node_modules/.bin:$PATH" repo2c4 validate             --output artifacts/repo2c4/generated
+
+      - name: Build Repo2C4 preview under /repo2c4/
+        run: |
+          BASE_PATH="${{ steps.pages.outputs.base_path || '/' }}"
+          BASE_PATH="${BASE_PATH%/}"
+          npm exec -- likec4 build artifacts/repo2c4/generated             -o dist/pages/repo2c4             --base "${BASE_PATH}/repo2c4/"
+
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
