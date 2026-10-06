@@ -15,5 +15,8 @@
   },
   "devDependencies": {
     "likec4": "1.59.4"
+  },
+  "overrides": {
+    "playwright": "1.61.0"
   }
 }

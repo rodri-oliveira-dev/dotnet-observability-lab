@@ -21,7 +21,7 @@ concurrency:
 jobs:
   analyze:
     name: Analisar C# com CodeQL
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER_OS || 'ubuntu-26.04' }}
 
     steps:
       - name: Checkout

@@ -17,7 +17,7 @@ concurrency:
 jobs:
   ingestion:
     name: Build, test, coverage and architecture
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER_OS || 'ubuntu-26.04' }}
     timeout-minutes: 35
     steps:
       - name: Checkout (read-only)
