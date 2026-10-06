@@ -42,7 +42,7 @@ concurrency:
 jobs:
   render:
     name: Build current architecture and Repo2C4 preview
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER_OS || 'ubuntu-26.04' }}
     timeout-minutes: 20
     steps:
       - name: Checkout repository
@@ -148,7 +148,7 @@ jobs:
     name: Build GitHub Pages site
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: render
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER_OS || 'ubuntu-26.04' }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -258,7 +258,7 @@ jobs:
     name: Deploy GitHub Pages
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: build-pages
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER_OS || 'ubuntu-26.04' }}
     timeout-minutes: 10
     permissions:
       pages: write
