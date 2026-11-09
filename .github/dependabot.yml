@@ -54,10 +54,15 @@ updates:
       timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 5
     groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
       minor-and-patch:
         applies-to: "version-updates"
         patterns:
           - "*"
+        exclude-patterns:
+          - "github/codeql-action/*"
         update-types:
           - "minor"
           - "patch"
