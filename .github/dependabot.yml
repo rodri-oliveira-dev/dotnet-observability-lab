@@ -1,68 +1,36 @@
-# Adapted from ReliableWebhooks for this .NET Aspire + LikeC4 application.
+# Consolidate version updates from NuGet, SDK, npm, and GitHub Actions.
+# Security updates follow Dependabot's own security update behavior.
 version: 2
 
-updates:
-  - package-ecosystem: "nuget"
-    directory: "/"
+multi-ecosystem-groups:
+  weekly-dependencies:
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
       timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 5
-    groups:
-      minor-and-patch:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    multi-ecosystem-group: "weekly-dependencies"
+    patterns:
+      - "*"
 
   - package-ecosystem: "dotnet-sdk"
     directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:15"
-      timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 2
+    multi-ecosystem-group: "weekly-dependencies"
+    patterns:
+      - "*"
 
   - package-ecosystem: "npm"
     directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:30"
-      timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 2
-    groups:
-      minor-and-patch:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    multi-ecosystem-group: "weekly-dependencies"
+    patterns:
+      - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:45"
-      timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 5
-    groups:
-      codeql-action:
-        patterns:
-          - "github/codeql-action/*"
-      minor-and-patch:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        exclude-patterns:
-          - "github/codeql-action/*"
-        update-types:
-          - "minor"
-          - "patch"
+    multi-ecosystem-group: "weekly-dependencies"
+    patterns:
+      - "*"
